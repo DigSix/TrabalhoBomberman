@@ -6,6 +6,7 @@ using namespace std;
 #include <conio.h>
 #include <cstdlib>
 #include <time.h>
+#include <fstream>
 
 #define m_size 7 /// Please only use >= 5 odd numbers.
 

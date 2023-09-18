@@ -8,7 +8,7 @@ using namespace std;
 #include <time.h>
 #include <fstream>
 
-#define m_size 7 /// Please only use >= 5 odd numbers.
+#define m_size 9 /// Please only use >= 5 odd numbers.
 
 #define floor 0
 #define wall 1
@@ -184,7 +184,7 @@ void new_obj(int map[m_size][m_size], int x, int y, int direction[2], int new_ob
 
 }
 
-/// Checking horizontal collisions.
+/// Checking collisions.
 bool collision(int map[m_size][m_size], int x, int y, int collider, int direction[2]) {
     if (map[y + direction[0]][x + direction[1]] == collider) {
         return true;
@@ -364,9 +364,9 @@ int main()
     bool enemy_moving = false;
 
     /// Clock_t variables
-    clock_t start_bomb_timer = clock(), end_bomb_timer;
-    clock_t start_explosion_timer = clock(), end_explosion_timer;
-    clock_t start_enemy_timer = clock(), interval_enemy_timer = clock(), end_enemy_timer;
+    clock_t start_bomb_timer = clock();
+    clock_t start_explosion_timer = clock();
+    clock_t start_enemy_timer = clock(), interval_enemy_timer = clock();
     clock_t start_game_timer = clock(), end_game_timer;
 
     create_map(map, player_x, player_y, enemy_x, enemy_y);
@@ -376,9 +376,6 @@ int main()
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 
         /// Updating timers
-        end_bomb_timer = clock();
-        end_explosion_timer = clock();
-        end_enemy_timer = clock();
         end_game_timer = clock();
 
         /// Geting inputs and controling player
@@ -390,25 +387,25 @@ int main()
 
         /// Destroing bomb and cleaning the explosion area
         if (bombs_remaining == 0) {
-            if (!bomb_exploded && timer_check(start_bomb_timer, end_bomb_timer, bomb_timer)) {
+            if (!bomb_exploded && timer_check(start_bomb_timer, end_game_timer, bomb_timer)) {
                 destroy_bomb(map, bomb_x, bomb_y, bombs_remaining);
                 bomb_exploded = true;
                 start_explosion_timer = clock();
             }
         }
-        if (bomb_exploded && timer_check(start_explosion_timer, end_explosion_timer, explosion_timer)) {
+        if (bomb_exploded && timer_check(start_explosion_timer, end_game_timer, explosion_timer)) {
             clear_explosion(map);
             bomb_exploded = false;
         }
 
         /// Sorting range, direction and moving enemy.
-        if (!enemy_moving && timer_check(start_enemy_timer, end_enemy_timer, enemy_timer)) {
+        if (!enemy_moving && timer_check(start_enemy_timer, end_game_timer, enemy_timer)) {
             sort_direction = rand() % 4;
             enemy_range = rand() % 3;
             interval_enemy_timer = clock();
             enemy_moving = true;
         }
-        if (enemy_moving && timer_check(interval_enemy_timer, end_enemy_timer, enemy_interval_timer)) {
+        if (enemy_moving && timer_check(interval_enemy_timer, end_game_timer, enemy_interval_timer)) {
             move_enemy(map, enemy_x, enemy_y, possibles_directions[sort_direction]);
             interval_enemy_timer = clock();
             if (enemy_check_range == enemy_range) {

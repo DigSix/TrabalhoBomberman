@@ -8,7 +8,7 @@ using namespace std;
 #include <time.h>
 #include <fstream>
 
-#define m_size 9 /// Please only use >= 5 odd numbers.
+#define m_size 7 /// Please only use >= 5 odd numbers.
 
 #define floor 0
 #define wall 1
@@ -331,6 +331,35 @@ bool player_die(int map[m_size][m_size], int x, int y, int killer) {
 
 }
 
+/// Manipulating map.
+void read_map(int map[m_size][m_size]) {
+    ifstream new_map;
+    new_map.open("New_map.txt");
+    for (int i = 0; i < m_size; i++) {
+        for (int j = 0; j < m_size; j++) {
+            new_map >> map[i][j];
+        }
+    }
+
+}
+
+void write_map(int map[m_size][m_size]) {
+    ofstream my_map;
+    my_map.open("My_map.txt");
+    for (int i = 0; i < m_size; i++) {
+        for (int j = 0; j < m_size; j++) {
+            my_map << map[i][j];
+            if (j < m_size - 1) {
+                my_map << " ";
+            }
+            if (j == m_size - 1) {
+                my_map << "\n";
+            }
+        }
+    }
+    my_map.close();
+}
+
 
 /// Main function hahaha XD.
 int main()
@@ -370,6 +399,8 @@ int main()
     clock_t start_game_timer = clock(), end_game_timer;
 
     create_map(map, player_x, player_y, enemy_x, enemy_y);
+    write_map(map);
+    read_map(map);
 
     while (true && !player_die(map, player_x, player_y, enemy) && !bomb_kill(map, enemy_x, enemy_y)) {
 

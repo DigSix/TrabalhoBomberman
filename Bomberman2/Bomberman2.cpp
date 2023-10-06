@@ -8,7 +8,7 @@ using namespace std;
 #include <time.h>
 #include <fstream>
 
-#define m_size 7 /// Please only use >= 5 odd numbers.
+#define m_size 9 /// Please only use >= 5 odd numbers.
 
 #define floor 0
 #define wall 1
@@ -26,11 +26,60 @@ using namespace std;
 #define enemy_timer 500
 #define enemy_interval_timer enemy_timer / 3
 
-int possibles_directions[4][2] = {
-    {0,1},
-    {1,0},
-    {0,-1},
-    {-1,0},
+struct coords {
+
+    int x = 0, y = 0;
+
+};
+
+coords directions[4]{
+    {0,1}, //Up = [0]
+    {1,0}, //Left = [1]
+    {0,-1}, //Down = [2]
+    {-1,0}, //Right = [3]
+};
+
+
+bool collision(int map[m_size][m_size], coords obj, int collider, coords direction) {
+    if (map[obj.y + direction.y][obj.x + direction.x] == collider) {
+        return true;
+    }
+    else {
+        return false;
+    }
+
+}
+
+struct Player {
+
+    coords pcoords;
+    void player_control(int map[m_size][m_size], char key) {
+
+        static coords player_direction;
+        switch (key) {
+        case 72: case 'w':
+            player_direction = directions[0];
+            break;
+        case 75: case 'a':
+            player_direction = directions[1];
+            break;
+        case 80: case 's':
+            player_direction = directions[2];
+            break;
+        case 77: case 'd':
+            player_direction = directions[3];
+            break;
+        default:
+            return;
+        }
+
+        if (!collision(map, pcoords, wall, player_direction) && !collision(map, pcoords, brk_wall, player_direction)) {
+            pcoords.x += player_direction.x;
+            pcoords.y += player_direction.y;
+        }
+
+    }
+
 };
 
 /// Generating map.
@@ -400,7 +449,7 @@ int main()
 
     create_map(map, player_x, player_y, enemy_x, enemy_y);
     write_map(map);
-    read_map(map);
+    //read_map(map);
 
     while (true && !player_die(map, player_x, player_y, enemy) && !bomb_kill(map, enemy_x, enemy_y)) {
 

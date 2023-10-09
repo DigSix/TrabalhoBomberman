@@ -98,9 +98,10 @@ public:
     coords ecoords;
 
 private:
-    bool enemy_moving = false;
+    bool is_enemy_moving = false;
     coords sort_direction;
     int sort_range;
+    clock_t start, interval;
 
     void move_enemy(int map[m_size][m_size], coords direction) {
         if (!collision(map, ecoords, wall, direction) && !collision(map, ecoords, brk_wall, direction) && !collision(map, ecoords, bomb, direction)) {
@@ -114,24 +115,79 @@ private:
     }
 
 public:
-    void enemy_moving(int map[m_size][m_size], clock_t start, clock_t interval, clock_t end) {
-
+    void enemy_moving(int map[m_size][m_size], clock_t end) {
         if (!enemy_moving && timer_check(start, end, enemy_timer)) {
             sort_direction = directions[rand() % 4];
             sort_range = (rand() % 3) + 1;
             interval = clock();
-            enemy_moving = true;
+            is_enemy_moving = true;
         }
         if (enemy_moving && timer_check(interval, end, enemy_timer)) {
             move_enemy(map, sort_direction);
             interval = clock();
             if (sort_range == 0) {
                 start = clock();
-                enemy_moving = false;
+                is_enemy_moving = false;
             }
             else {
                 sort_range--;
             }
+        }
+    }
+};
+
+struct Bomb {
+public:
+    coords bcoords;
+    int bombs_remaning = 1;
+    int range = 1;
+
+private:
+    clock_t start, interval;
+    bool is_bomb_exploded = false;
+
+    void show_explosion(int map[m_size][m_size]) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 1; j <= range; j++) {
+                if (!collision(map, bcoords, wall, directions[i])) {
+                    map[bcoords.y + (directions[i].y * j)][bcoords.x + (directions[i].x * j)] = explosion;
+                }
+            }
+        }
+        bombs_remaning++;
+    }
+    void clear_explosion(int map[m_size][m_size]) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 1; j <= range; j++) {
+                if (!collision(map, bcoords, wall, directions[i])) {
+                    map[bcoords.y + (directions[i].y * j)][bcoords.x + (directions[i].x * j)] = floor;
+                }
+            }
+        }
+    }
+
+public:
+    void place_bomb(int map[m_size][m_size], coords Player, char key) {
+        if (key == 32 || key == ' ') {
+            if (bombs_remaning > 0) {
+                bcoords.x = Player.x;
+                bcoords.y = Player.y;
+                bombs_remaning--;
+                start = clock();
+            }
+        }
+    }
+
+    void destroy_bomb(int map[m_size][m_size], clock_t end) {
+        if (!is_bomb_exploded && timer_check(start, end, bomb_timer)) {
+            is_bomb_exploded = true;
+            show_explosion(map);
+            interval = clock();
+        }
+        if (is_bomb_exploded && timer_check(interval, end, explosion_timer)) {
+            is_bomb_exploded = false;
+            clear_explosion(map);
+            start = clock();
         }
     }
 };

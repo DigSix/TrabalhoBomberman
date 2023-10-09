@@ -28,7 +28,7 @@ using namespace std;
 
 struct coords {
 
-    int x = 0, y = 0;
+    int x, y;
 
 };
 
@@ -50,9 +50,23 @@ bool collision(int map[m_size][m_size], coords obj, int collider, coords directi
 
 }
 
+bool timer_check(clock_t start_timer, clock_t end_timer, int timer_size) {
+
+    if (((end_timer - start_timer) / (CLOCKS_PER_SEC / 1000)) >= timer_size) {
+        return true;
+    }
+    else {
+        return false;
+    }
+
+}
+
 struct Player {
 
+private:
     coords pcoords;
+
+public:
     void player_control(int map[m_size][m_size], char key) {
 
         static coords player_direction;
@@ -77,9 +91,49 @@ struct Player {
             pcoords.x += player_direction.x;
             pcoords.y += player_direction.y;
         }
+    }
+};
 
+struct Enemy {
+
+private:
+    coords ecoords;
+    bool enemy_moving = false;
+    coords sort_direction;
+    int sort_range;
+
+    void move_enemy(int map[m_size][m_size], coords direction) {
+        if (!collision(map, ecoords, wall, direction) && !collision(map, ecoords, brk_wall, direction) && !collision(map, ecoords, bomb, direction)) {
+            ecoords.x += direction.x;
+            ecoords.y += direction.y;
+        }
+        else {
+            direction = directions[rand() % 4];
+            move_enemy(map, direction);
+        }
     }
 
+public:
+    void enemy_moving(int map[m_size][m_size], clock_t start, clock_t interval, clock_t end) {
+
+        if (!enemy_moving && timer_check(start, end, enemy_timer)) {
+            sort_direction = directions[rand() % 4];
+            sort_range = (rand() % 3) + 1;
+            interval = clock();
+            enemy_moving = true;
+        }
+        if (enemy_moving && timer_check(interval, end, enemy_timer)) {
+            move_enemy(map, sort_direction);
+            interval = clock();
+            if (sort_range == 0) {
+                start = clock();
+                enemy_moving = false;
+            }
+            else {
+                sort_range--;
+            }
+        }
+    }
 };
 
 /// Generating map.

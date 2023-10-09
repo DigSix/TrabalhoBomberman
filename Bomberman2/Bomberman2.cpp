@@ -63,10 +63,8 @@ bool timer_check(clock_t start_timer, clock_t end_timer, int timer_size) {
 
 struct Player {
 
-private:
-    coords pcoords;
-
 public:
+    coords pcoords;
     void player_control(int map[m_size][m_size], char key) {
 
         static coords player_direction;
@@ -96,8 +94,10 @@ public:
 
 struct Enemy {
 
-private:
+public:
     coords ecoords;
+
+private:
     bool enemy_moving = false;
     coords sort_direction;
     int sort_range;

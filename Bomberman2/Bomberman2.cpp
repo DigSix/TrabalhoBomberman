@@ -8,7 +8,7 @@ using namespace std;
 #include <time.h>
 #include <fstream>
 
-#define m_size 7 /// Please only use >= 5 odd numbers.
+#define m_size 9 /// Please only use >= 5 odd numbers.
 
 #define floor 0
 #define wall 1
@@ -26,11 +26,114 @@ using namespace std;
 #define enemy_timer 500
 #define enemy_interval_timer enemy_timer / 3
 
-int possibles_directions[4][2] = {
-    {0,1},
-    {1,0},
-    {0,-1},
-    {-1,0},
+struct coords {
+
+    int x, y;
+
+};
+
+coords directions[4]{
+    {0,1}, //Up = [0]
+    {1,0}, //Left = [1]
+    {0,-1}, //Down = [2]
+    {-1,0}, //Right = [3]
+};
+
+
+bool collision(int map[m_size][m_size], coords obj, int collider, coords direction) {
+    if (map[obj.y + direction.y][obj.x + direction.x] == collider) {
+        return true;
+    }
+    else {
+        return false;
+    }
+
+}
+
+bool timer_check(clock_t start_timer, clock_t end_timer, int timer_size) {
+
+    if (((end_timer - start_timer) / (CLOCKS_PER_SEC / 1000)) >= timer_size) {
+        return true;
+    }
+    else {
+        return false;
+    }
+
+}
+
+struct Player {
+
+public:
+    coords pcoords;
+    void player_control(int map[m_size][m_size], char key) {
+
+        static coords player_direction;
+        switch (key) {
+        case 72: case 'w':
+            player_direction = directions[0];
+            break;
+        case 75: case 'a':
+            player_direction = directions[1];
+            break;
+        case 80: case 's':
+            player_direction = directions[2];
+            break;
+        case 77: case 'd':
+            player_direction = directions[3];
+            break;
+        default:
+            return;
+        }
+
+        if (!collision(map, pcoords, wall, player_direction) && !collision(map, pcoords, brk_wall, player_direction)) {
+            pcoords.x += player_direction.x;
+            pcoords.y += player_direction.y;
+        }
+    }
+};
+
+struct Enemy {
+
+public:
+    coords ecoords;
+
+private:
+    bool enemy_moving = false;
+    coords sort_direction;
+    int sort_range;
+
+    void move_enemy(int map[m_size][m_size], coords direction) {
+        if (!collision(map, ecoords, wall, direction) && !collision(map, ecoords, brk_wall, direction) && !collision(map, ecoords, bomb, direction)) {
+            ecoords.x += direction.x;
+            ecoords.y += direction.y;
+        }
+        else {
+            direction = directions[rand() % 4];
+            move_enemy(map, direction);
+        }
+    }
+
+public:
+    void enemy_moving(int map[m_size][m_size], clock_t start, clock_t interval, clock_t end) {
+
+        if (!enemy_moving && timer_check(start, end, enemy_timer)) {
+            sort_direction = directions[rand() % 4];
+            sort_range = (rand() % 3) + 1;
+            interval = clock();
+            enemy_moving = true;
+        }
+        if (enemy_moving && timer_check(interval, end, enemy_timer)) {
+            move_enemy(map, sort_direction);
+            interval = clock();
+            if (sort_range == 0) {
+                start = clock();
+                enemy_moving = false;
+            }
+            else {
+                sort_range--;
+            }
+        }
+    }
 };
 
 /// Generating map.
@@ -400,7 +503,7 @@ int main()
 
     create_map(map, player_x, player_y, enemy_x, enemy_y);
     write_map(map);
-    read_map(map);
+    //read_map(map);
 
     while (true && !player_die(map, player_x, player_y, enemy) && !bomb_kill(map, enemy_x, enemy_y)) {
 

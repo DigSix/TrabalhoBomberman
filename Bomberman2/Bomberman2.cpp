@@ -33,10 +33,10 @@ struct coords {
 };
 
 coords directions[4]{
-    {0,1}, //Up = [0]
-    {1,0}, //Left = [1]
-    {0,-1}, //Down = [2]
-    {-1,0}, //Right = [3]
+    {0,-1}, //Up = [0]
+    {-1,0}, //Left = [1]
+    {0,1}, //Down = [2]
+    {1,0}, //Right = [3]
 };
 
 /// Checking collisions.

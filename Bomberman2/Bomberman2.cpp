@@ -192,8 +192,62 @@ public:
     }
 };
 
+void drawn_m(int map[m_size][m_size], coords pcoords, coords ecoords,coords bcoords, HANDLE color) {
+
+    int i = 0, j = 0;
+    for (i = 0; i < m_size; i++) {
+        for (j = 0; j < m_size; j++) {
+
+            if (((i == pcoords.y) && (j == pcoords.x)) && ((pcoords.x != bcoords.x) && (pcoords.y != bcoords.y))) { /// Player.
+                SetConsoleTextAttribute(color, 12);
+                cout << char(3);
+            }
+
+            if ((i == ecoords.y) && (j == ecoords.x)) { /// Enemy.
+                SetConsoleTextAttribute(color, 15);
+                cout << char(30);
+            }
+
+            if (((i == bcoords.y) && (j == bcoords.x)) && ((pcoords.x != bcoords.x) && (pcoords.y != bcoords.y))) { /// Bobm.
+                SetConsoleTextAttribute(color, 15);
+                cout << char(15);
+            }
+
+            if ((pcoords.x == bcoords.x) && (pcoords.y == bcoords.y)) { /// Player and bomb.
+                SetConsoleTextAttribute(color, 15);
+                cout << char(3);
+            }
+
+            switch (map[i][j]) {
+
+            case floor: /// Floor.
+                SetConsoleTextAttribute(color, 0);
+                cout << char(219);
+                break;
+
+            case wall: /// Solid wall.
+                SetConsoleTextAttribute(color, 8);
+                cout << char(177);
+                break;
+
+            case brk_wall: /// Breakable wall.
+                SetConsoleTextAttribute(color, 15);
+                cout << char(177);
+                break;
+
+            case explosion: /// Kabum!
+                SetConsoleTextAttribute(color, 15);
+                cout << char(15);
+                break;
+
+            }
+        }
+        cout << "\n";
+    }
+}
+
 /// Generating map.
-void create_map(int map[m_size][m_size], int& player_x, int& player_y, int& enemy_x, int& enemy_y) {
+void create_map(int map[m_size][m_size], coords& pcoords, coords& ecoords) {
 
     int i, j;
 
@@ -228,16 +282,15 @@ void create_map(int map[m_size][m_size], int& player_x, int& player_y, int& enem
 
             /// Placing enemy.
             if (i == 1 && j == 1) {
-                map[i][j] = enemy;
-                enemy_x = j;
-                enemy_y = i;
+                ecoords.x = j;
+                ecoords.y = i;
             }
 
             /// Placing player.
             if (i == m_size - 2 && j == m_size - 2) {
                 map[i][j] = player;
-                player_x = j;
-                player_y = i;
+                pcoords.x = j;
+                pcoords.y = i;
             }
 
         }

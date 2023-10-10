@@ -32,11 +32,17 @@ struct coords {
 
 };
 
+struct coords {
+
+    int x, y;
+
+};
+
 coords directions[4]{
-    {0,1}, //Up = [0]
-    {1,0}, //Left = [1]
-    {0,-1}, //Down = [2]
-    {-1,0}, //Right = [3]
+    {0,-1}, //Up = [0]
+    {-1,0}, //Left = [1]
+    {0,1}, //Down = [2]
+    {1,0}, //Right = [3]
 };
 
 
@@ -116,13 +122,13 @@ private:
 
 public:
     void enemy_moving(int map[m_size][m_size], clock_t end) {
-        if (!enemy_moving && timer_check(start, end, enemy_timer)) {
+        if (!is_enemy_moving && timer_check(start, end, enemy_timer)) {
             sort_direction = directions[rand() % 4];
             sort_range = (rand() % 3) + 1;
             interval = clock();
             is_enemy_moving = true;
         }
-        if (enemy_moving && timer_check(interval, end, enemy_timer)) {
+        if (is_enemy_moving && timer_check(interval, end, enemy_timer)) {
             move_enemy(map, sort_direction);
             interval = clock();
             if (sort_range == 0) {
@@ -192,7 +198,7 @@ public:
     }
 };
 
-void drawn_m(int map[m_size][m_size], coords pcoords, coords ecoords,coords bcoords, HANDLE color) {
+void drawn_m(int map[m_size][m_size], coords pcoords, coords ecoords, coords bcoords, HANDLE color) {
 
     int i = 0, j = 0;
     for (i = 0; i < m_size; i++) {
@@ -213,7 +219,7 @@ void drawn_m(int map[m_size][m_size], coords pcoords, coords ecoords,coords bcoo
                 cout << char(15);
             }
 
-            if ((pcoords.x == bcoords.x) && (pcoords.y == bcoords.y)) { /// Player and bomb.
+            if (((j == pcoords.x) && (j == bcoords.x)) && ((i == pcoords.y) && (i == bcoords.y))) { /// Player and bomb.
                 SetConsoleTextAttribute(color, 15);
                 cout << char(3);
             }
@@ -264,8 +270,8 @@ void create_map(int map[m_size][m_size], coords& pcoords, coords& ecoords) {
 
             /// Generating midle walls and breakable walls.
             if (i > 0 && i < m_size - 1 && j > 0 && j < m_size - 1) {
-                
-                if (i % 2 == 0 || j % 2 == 0) { 
+
+                if (i % 2 == 0 || j % 2 == 0) {
                     map[i][j] = brk_wall;
                 }
 

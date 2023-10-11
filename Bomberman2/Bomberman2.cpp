@@ -20,7 +20,7 @@ using namespace std;
 #define m_explosion 7
 
 #define max_bombs 1
-#define enemy_count 3
+#define enemy_count 1
 #define bomb_timer 1000
 #define explosion_timer 250
 #define enemy_timer 500
@@ -58,9 +58,13 @@ void new_obj(int map[m_size][m_size], coords position, coords direction, int new
 }
 
 /// Timer function.
-bool timer_check(clock_t start_timer, clock_t end_timer, int timer_size) {
+int interval_to_ms(clock_t start_ts, clock_t end_ts) {
+    return (end_ts - start_ts) / (CLOCKS_PER_SEC / 1000);
+}
 
-    if (((end_timer - start_timer) / (CLOCKS_PER_SEC / 1000)) >= timer_size) {
+bool timer_check(clock_t start_ts, clock_t end_ts, int timer_size) {
+
+    if (interval_to_ms(start_ts, end_ts) >= timer_size) {
         return true;
     }
     else {
@@ -74,7 +78,7 @@ public:
     coords position;
     clock_t bomb_start_ts;
     clock_t explosion_start_ts;
-    bool exploded;
+    bool exploded = false;
 
     void start_bomb(int map[m_size][m_size], coords player_position) {
         position.x = player_position.x;
@@ -119,9 +123,9 @@ public:
 struct Player {
 
 public:
-    int bombs_remaining;
+    coords position = { 5,5 };
+    int bombs_remaining = max_bombs;
     Bomb bomb;
-    coords position;
 
     void check_bomb_loop(int map[m_size][m_size]) {
         if (bombs_remaining == 0) {
@@ -199,11 +203,11 @@ struct Enemy {
 
 public:
     coords position;
-    bool alive;
+    bool alive = true;
+    bool enemy_moving = false;
 
     clock_t movement_start_ts;
     clock_t interval_start_ts;
-    bool enemy_moving = false;
     coords sort_direction;
     int sort_range;
 
@@ -241,7 +245,6 @@ public:
     }
 };
 
-/// Generating map.
 void create_map(int map[m_size][m_size]) {
 
     int i, j;
@@ -249,30 +252,11 @@ void create_map(int map[m_size][m_size]) {
     for (i = 0; i < m_size; i++) {
         for (j = 0; j < m_size; j++) {
 
-            /// Generating side m_walls and m_floors.
             if (i == 0 || i == m_size - 1 || j == 0 || j == m_size - 1) {
                 map[i][j] = m_wall;
             }
             else {
                 map[i][j] = m_floor;
-            }
-
-            /// Generating midle m_walls and breakable m_walls.
-            if (i > 0 && i < m_size - 1 && j > 0 && j < m_size - 1) {
-                
-                if (i % 2 == 0 || j % 2 == 0) { 
-                    map[i][j] = m_brk_wall;
-                }
-
-                if (i % 2 == 0 && j % 2 == 0) {
-                    map[i][j] = m_wall;
-                }
-
-                /// Generating side space for the start moves.
-                if (((i == 1 || i == m_size - 2) && j < 3) || ((i == 1 || i == m_size - 2) && j > m_size - 4) || ((j == 1 || j == m_size - 2) && i < 3) || ((j == 1 || j == m_size - 2) && i > m_size - 4)) {
-                    map[i][j] = m_floor;
-                }
-
             }
 
         }
@@ -338,13 +322,13 @@ void draw(int map[m_size][m_size], HANDLE color) {
     }
 }
 
-void draw_time(clock_t start_timer, clock_t end_timer, int minutes) {
-
+void draw_time(clock_t start_ts, clock_t end_ts) {
+    int s_time = interval_to_ms(start_ts, end_ts)/1000;
+    int seconds = s_time % 60;
+    int minutes = s_time / 60;
     cout << "TIME - " << minutes << ":";
-    if ((end_timer - start_timer) / CLOCKS_PER_SEC < 10) {
-        cout << "0";
-    }
-    cout << (end_timer - start_timer) / CLOCKS_PER_SEC << "\n";
+    if (seconds < 10) cout << "0";
+    cout << seconds << "\n";
 
 }
 
@@ -398,27 +382,12 @@ void write_map(int map[m_size][m_size]) {
     my_map.close();
 }
 
-void handleKeyPressing(HANDLE out) {
-    static short int CX = 0, CY = 0;
-    COORD coord;
-    coord.X = CX;
-    coord.Y = CY;
-
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-    CONSOLE_CURSOR_INFO     cursorInfo;
-    GetConsoleCursorInfo(out, &cursorInfo);
-    cursorInfo.bVisible = false; // set the cursor visibility
-    SetConsoleCursorInfo(out, &cursorInfo);
-}
-
-void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size]) {
-    
-    static HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
-    handleKeyPressing(out);
+void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord) {
+        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 
         /// Updating timers
         static clock_t start_game_ts = clock();
-        static char key{};
+        static char key;
         static int minutes = 0;
         clock_t current_ts = clock();
 
@@ -436,44 +405,89 @@ void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
             }
         }
 
-        if (timer_check(start_game_ts, current_ts, 60000)) {
-            minutes++;
-            start_game_ts = clock();
-        }
-
         SetConsoleTextAttribute(out, 15);
-        draw_time(start_game_ts, current_ts, minutes);
+        draw_time(start_game_ts, current_ts);
         draw(map, out);
 
     
     if (!player.check_death(map)) {
-        game_loop(enemies, player, map);
+        game_loop(enemies, player, map, out, coord);
     }
 }
 
+void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, bool pause, clock_t start_game_ts=0, clock_t current_ts=0) {
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+    static char key;
+    static int menu_select = 0;
 
-/// Main function hahaha XD.
+    string menu_options[2] = {
+        "Jogar",
+        "Sair",
+    };
+
+    if (pause) {
+        draw_time(start_game_ts, current_ts);
+    }
+    for (int i = 0; i < 2; i++) {
+        if (menu_select == i) { 
+            cout << "-> "; 
+        }
+        else {
+            cout << "   ";
+        }
+        cout << menu_options[i] << "\n";
+    }
+
+    while (true) {
+        if (_kbhit()) {
+            key = _getch();
+            switch (key) {
+            case ' ':
+                switch (menu_select) {
+                case 0:
+                    game_loop(enemies, player, map, out, coord);
+                    return;
+                case 1:
+                    return;
+                }
+            case 72: case 'w':
+                if (menu_select > 0) menu_select--;
+                menu_loop(enemies, player, map, out, coord, pause, start_game_ts, current_ts);
+                return;
+            case 80: case 's':
+                if (menu_select < 1) menu_select++;
+                menu_loop(enemies, player, map, out, coord, pause, start_game_ts, current_ts);
+                return;
+            }
+        }
+    }
+}
+
 int main()
 {
     srand(time(NULL));
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO     cursorInfo;
+    GetConsoleCursorInfo(out, &cursorInfo);
+    cursorInfo.bVisible = false; 
+    SetConsoleCursorInfo(out, &cursorInfo);
+
+    short int CX = 0, CY = 0;
+    COORD coord;
+    coord.X = CX;
+    coord.Y = CY;
 
     int map[m_size][m_size];
     Player player; 
-    player.bombs_remaining = 0;
-        player.position.x = 5;
-        player.position.y = 5;
-
     Enemy enemies[enemy_count];
     for (int i = 0; i < enemy_count; i++) {
-        enemies[i].position.x = i;
-        enemies[i].position.y = i;
-
+        enemies[i].position = { i + 1, i + 1 };
     }
 
     create_map(map);
     write_map(map);
     //read_map(map);
 
-    game_loop(enemies, player, map);
+    menu_loop(enemies, player, map, out, coord, false);
     return 0;
 }

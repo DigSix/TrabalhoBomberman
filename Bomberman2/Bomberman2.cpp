@@ -32,14 +32,14 @@ struct coords {
 
 };
 
-coords directions[4]{
+coords directions[5]{
     {0,-1}, //Up = [0]
     {-1,0}, //Left = [1]
     {0,1}, //Down = [2]
     {1,0}, //Right = [3]
+    {0,0},
 };
 
-/// Checking collisions.
 bool collision(int map[m_size][m_size], coords position, int collider, coords direction) {
     if (map[position.y + direction.y][position.x + direction.x] == collider) {
         return true;
@@ -50,14 +50,6 @@ bool collision(int map[m_size][m_size], coords position, int collider, coords di
 
 }
 
-void new_obj(int map[m_size][m_size], coords position, coords direction, int new_obj, int old_obj) {
-
-    map[position.y + direction.y][position.x + direction.x] = new_obj;
-    map[position.y][position.x] = old_obj;
-
-}
-
-/// Timer function.
 int interval_to_ms(clock_t start_ts, clock_t end_ts) {
     return (end_ts - start_ts) / (CLOCKS_PER_SEC / 1000);
 }
@@ -80,43 +72,35 @@ public:
     clock_t explosion_start_ts;
     bool exploded = false;
 
-    void start_bomb(int map[m_size][m_size], coords player_position) {
+    void start_bomb(coords player_position) {
         position.x = player_position.x;
         position.y = player_position.y;
-        map[position.y][position.x] = m_plr_and_bb;
         bomb_start_ts = clock();
     }
 
     void destroy(int map[m_size][m_size]) {
         for (int i = 0; i < 4; i++) {
-            if (!collision(map, position, m_wall, directions[i])) {
-                new_obj(map, position, directions[i], m_explosion, m_explosion);
+            if (map[position.y+directions[i].y][position.x + directions[i].x] == m_brk_wall) {
+                map[position.y + directions[i].y][position.x + directions[i].x] = m_floor;
             }
         }
         exploded = true;
         explosion_start_ts = clock();
     }
 
-    void clear_explosion(int map[m_size][m_size]) {
+    void clear_explosion() {
         exploded = false;
-        int i, j;
-
-            for (i = 1; i < m_size - 1; i++) {
-                for (j = 1; j < m_size - 1; j++) {
-                    if (map[i][j] == m_explosion) {
-                        map[i][j] = m_floor;
-                    }
-                }
-            }
     }
 
-    bool has_killed(int map[m_size][m_size], coords position) {
-        if (map[position.y][position.x] == m_explosion) {
-            return true;
+    bool has_killed( coords entity_position) {
+        if (exploded) {
+            for (int i = 0; i < 5; i++) {
+                if (entity_position.y == position.y + directions[i].y && entity_position.x == position.x + directions[i].x) {
+                    return true;
+                }
+            }
         }
-        else {
-            return false;
-        }
+        return false;
     }
 };
 
@@ -124,6 +108,7 @@ struct Player {
 
 public:
     coords position = { 5,5 };
+    coords player_direction;
     int bombs_remaining = max_bombs;
     Bomb bomb;
 
@@ -132,11 +117,12 @@ public:
             if (!bomb.exploded && timer_check(bomb.bomb_start_ts, clock(), bomb_timer)) {
                 bomb.destroy(map);
             }
+            else if (bomb.exploded && timer_check(bomb.explosion_start_ts, clock(), explosion_timer)) {
+                bomb.clear_explosion();
+                bombs_remaining++;
+            }
         }
-        if (bomb.exploded && timer_check(bomb.explosion_start_ts, clock(), explosion_timer)) {
-            bomb.clear_explosion(map);
-            bombs_remaining++;
-        }
+
     }
 
     bool check_death(int map[m_size][m_size]) {
@@ -145,18 +131,14 @@ public:
                 return true;
             }
         }
-        if (bomb.has_killed(map, position)) {
+        if (bomb.has_killed(position)) {
             return true;
         }
-        else {
-            return false;
-        }
+        return false;
 
     }
 
     void player_control(int map[m_size][m_size], char key) {
-
-        static coords player_direction;
         switch (key) {
         case 72: case 'w':
             player_direction = directions[0];
@@ -170,32 +152,21 @@ public:
         case 77: case 'd':
             player_direction = directions[3];
             break;
-        case 28: case ' ':
+        case ' ':
             if (bombs_remaining > 0) {
-                bomb.start_bomb(map, position);
+                bomb.start_bomb(position);
                 bombs_remaining--;
             }
-            break;
+            return;
         default:
             return;
         }
 
         if (!collision(map, position, m_wall, player_direction) && !collision(map, position, m_brk_wall, player_direction)) {
-            if (collision(map, position, m_bomb, player_direction)) {
-                new_obj(map, position, player_direction, m_plr_and_bb, m_floor);
-            }
-            else {
-                if (map[position.y][position.x] == m_plr_and_bb) {
-                    new_obj(map, position, player_direction, m_player, m_bomb);
-                }
-                else {
-                    new_obj(map, position, player_direction, m_player, m_floor);
-                }
-            }
-
             position.x += player_direction.x;
             position.y += player_direction.y;
         }
+
     }
 };
 
@@ -204,7 +175,7 @@ struct Enemy {
 public:
     coords position;
     bool alive = true;
-    bool enemy_moving = false;
+    bool is_moving = false;
 
     clock_t movement_start_ts;
     clock_t interval_start_ts;
@@ -213,7 +184,6 @@ public:
 
     void move_enemy(int map[m_size][m_size], coords direction) {
         if (!collision(map, position, m_wall, direction) && !collision(map, position, m_brk_wall, direction)) {
-            new_obj(map, position, direction, m_enemy, m_floor);
             position.x += direction.x;
             position.y += direction.y;
         }
@@ -225,18 +195,18 @@ public:
 
     void check_enemy_movement(int map[m_size][m_size]) {
 
-        if (!enemy_moving && timer_check(movement_start_ts, clock(), enemy_timer)) {
+        if (!is_moving && timer_check(movement_start_ts, clock(), enemy_timer)) {
             sort_direction = directions[rand() % 4];
             sort_range = (rand() % 3) + 1;
             interval_start_ts = clock();
-            enemy_moving = true;
+            is_moving = true;
         }
-        if (enemy_moving && timer_check(interval_start_ts, clock(), enemy_timer)) {
+        if (is_moving && timer_check(interval_start_ts, clock(), enemy_timer)) {
             move_enemy(map, sort_direction);
             interval_start_ts = clock();
             if (sort_range == 0) {
                 movement_start_ts = clock();
-                enemy_moving = false;
+                is_moving = false;
             }
             else {
                 sort_range--;
@@ -252,8 +222,12 @@ void create_map(int map[m_size][m_size]) {
     for (i = 0; i < m_size; i++) {
         for (j = 0; j < m_size; j++) {
 
+
             if (i == 0 || i == m_size - 1 || j == 0 || j == m_size - 1) {
                 map[i][j] = m_wall;
+            }
+            else if (j == 4) {
+                map[i][j] = m_brk_wall;
             }
             else {
                 map[i][j] = m_floor;
@@ -264,7 +238,6 @@ void create_map(int map[m_size][m_size]) {
 
 }
 
-/// Dranwing objects.
 void draw(int map[m_size][m_size], HANDLE color) {
     int i = 0, j = 0;
     for (i = 0; i < m_size; i++) {
@@ -274,43 +247,43 @@ void draw(int map[m_size][m_size], HANDLE color) {
 
             case m_floor: /// m_floor.
                 SetConsoleTextAttribute(color, 0);
-                cout << char(219);
+                cout << " ";
                 break;
 
             case m_wall: /// Solid m_wall.
                 SetConsoleTextAttribute(color, 8);
-                cout << char(177);
+                cout << "w";
                 break;
 
             case m_brk_wall: /// Breakable m_wall.
                 SetConsoleTextAttribute(color, 15);
-                cout << char(177);
+                cout << "w";
                 break;
 
             case m_player: /// Player.
                 SetConsoleTextAttribute(color, 12);
-                cout << char(3);
+                cout << "p";
                 break;
 
             case m_enemy: /// Enemy.
                 SetConsoleTextAttribute(color, 15);
-                cout << char(30);
+                cout << "e";
                 break;
 
             case m_bomb: /// Bomb!
                 SetConsoleTextAttribute(color, 15);
-                cout << char(15);
+                cout << "b";
                 break;
 
 
             case m_plr_and_bb: /// Bomb! & Player.
                 SetConsoleTextAttribute(color, 15);
-                cout << char(3);
+                cout << "2";
                 break;
 
             case m_explosion: /// Kabum!
                 SetConsoleTextAttribute(color, 15);
-                cout << char(15);
+                cout << "k";
                 break;
 
             }
@@ -322,14 +295,16 @@ void draw(int map[m_size][m_size], HANDLE color) {
     }
 }
 
-void draw_time(clock_t start_ts, clock_t end_ts) {
-    int s_time = interval_to_ms(start_ts, end_ts)/1000;
-    int seconds = s_time % 60;
-    int minutes = s_time / 60;
+void draw_hud(clock_t start_ts, clock_t end_ts, int enemies_killed, HANDLE out) {
+    SetConsoleTextAttribute(out, 15);
+    static int s_time, minutes, seconds;
+    s_time = interval_to_ms(start_ts, end_ts)/1000;
+    seconds = s_time % 60;
+    minutes = s_time / 60;
     cout << "TIME - " << minutes << ":";
     if (seconds < 10) cout << "0";
-    cout << seconds << "\n";
-
+    cout << seconds;
+    cout << " SCORE: " << enemies_killed << "\n";
 }
 
 void draw_message(string message) {
@@ -340,7 +315,6 @@ void draw_message(string message) {
 
 }
 
-/// Clearing map
 void clear() {
     int i, j;
     for (i = 0; i < m_size + 1; i++) {
@@ -353,7 +327,6 @@ void clear() {
     }
 }
 
-/// Manipulating map.
 void read_map(int map[m_size][m_size]) {
     ifstream new_map;
     new_map.open("New_map.txt");
@@ -382,55 +355,56 @@ void write_map(int map[m_size][m_size]) {
     my_map.close();
 }
 
-void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord) {
-        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-
-        /// Updating timers
-        static clock_t start_game_ts = clock();
-        static char key;
-        static int minutes = 0;
-        clock_t current_ts = clock();
-
-        /// Geting inputs and controling player
-        if (_kbhit()) {
-            key = _getch();
-            player.player_control(map, key);
-        }
-
-        player.check_bomb_loop(map);
-
-        for (int i = 0; i < enemy_count; i++) {
-            if (enemies[i].alive) {
-                enemies[i].check_enemy_movement(map);
+void updateMatrix(Enemy enemies[enemy_count], Player player, int map[m_size][m_size]) {
+    for (int i = 0; i < m_size; i++) {
+        for (int j = 0; j < m_size; j++) {
+            if (map[i][j] != m_wall && map[i][j] != m_brk_wall) {
+                map[i][j] = m_floor;
             }
         }
+    }
+    map[player.position.y][player.position.x] = m_player;
+    if (player.bombs_remaining == 0) {
+        if (player.bomb.exploded) {
+            for (int i = 0; i < 5; i++) {
+                if (map[player.bomb.position.y + directions[i].y][player.bomb.position.x + directions[i].x] != m_wall) {
+                    map[player.bomb.position.y + directions[i].y][player.bomb.position.x + directions[i].x] = m_explosion;
+                }
+            }
+        }
+        else {
+            if (player.position.y == player.bomb.position.y && player.position.x == player.bomb.position.x) {
+                map[player.bomb.position.y][player.bomb.position.x] = m_plr_and_bb;
+            }
+            else {
+                map[player.bomb.position.y][player.bomb.position.x] = m_bomb;
+            }
+        }
+    }
 
-        SetConsoleTextAttribute(out, 15);
-        draw_time(start_game_ts, current_ts);
-        draw(map, out);
-
-    
-    if (!player.check_death(map)) {
-        game_loop(enemies, player, map, out, coord);
+    for (int i = 0; i < enemy_count; i++) {
+        if (enemies[i].alive) {
+            map[enemies[i].position.y][enemies[i].position.x] = m_enemy;
+        }
     }
 }
 
-void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, bool pause, clock_t start_game_ts=0, clock_t current_ts=0) {
+void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, clock_t time_offset);
+
+void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord) {
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
     static char key;
     static int menu_select = 0;
 
-    string menu_options[2] = {
-        "Jogar",
+    static string menu_options[3] = {
+        "Novo jogo",
+        "Carregar jogo",
         "Sair",
     };
 
-    if (pause) {
-        draw_time(start_game_ts, current_ts);
-    }
-    for (int i = 0; i < 2; i++) {
-        if (menu_select == i) { 
-            cout << "-> "; 
+    for (int i = 0; i < 3; i++) {
+        if (menu_select == i) {
+            cout << "-> ";
         }
         else {
             cout << "   ";
@@ -445,21 +419,112 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
             case ' ':
                 switch (menu_select) {
                 case 0:
-                    game_loop(enemies, player, map, out, coord);
+                    game_loop(enemies, player, map, out, coord, 0);
                     return;
-                case 1:
+                case 2:
                     return;
                 }
             case 72: case 'w':
                 if (menu_select > 0) menu_select--;
-                menu_loop(enemies, player, map, out, coord, pause, start_game_ts, current_ts);
+                menu_loop(enemies, player, map, out, coord);
                 return;
             case 80: case 's':
-                if (menu_select < 1) menu_select++;
-                menu_loop(enemies, player, map, out, coord, pause, start_game_ts, current_ts);
+                if (menu_select < 2) menu_select++;
+                menu_loop(enemies, player, map, out, coord);
                 return;
             }
         }
+    }
+}
+
+void pause_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, clock_t start_game_ts, clock_t final_game_ts, int enemies_killed) {
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+    static char key;
+    static int menu_select = 0;
+
+    static string menu_options[2] = {
+        "Continuar",
+        "Voltar para menu",
+    };
+
+    draw_hud(start_game_ts, final_game_ts, enemies_killed, out);
+    for (int i = 0; i < 2; i++) {
+        if (menu_select == i) {
+            cout << "-> ";
+        }
+        else {
+            cout << "   ";
+        }
+        cout << menu_options[i] << "\n";
+    }
+
+    while (true) {
+        if (_kbhit()) {
+            key = _getch();
+            switch (key) {
+            case ' ':
+                switch (menu_select) {
+                case 0:
+                    game_loop(enemies, player, map, out, coord, final_game_ts-start_game_ts);
+                    return;
+                case 1:
+                    system("cls");
+                    menu_loop(enemies, player, map, out, coord);
+                    return;
+                }
+            case 72: case 'w':
+                if (menu_select > 0) menu_select--;
+                pause_loop(enemies, player, map, out, coord, start_game_ts, final_game_ts, enemies_killed);
+                return;
+            case 80: case 's':
+                if (menu_select < 1) menu_select++;
+                pause_loop(enemies, player, map, out, coord, start_game_ts, final_game_ts, enemies_killed);
+                return;
+            }
+        }
+    }
+}
+
+void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, clock_t time_offset=0) {
+    system("cls");
+    clock_t start_game_ts = clock()-time_offset, current_ts;
+    static char key;
+    static int enemies_killed = 0;
+
+    while (!player.check_death(map)) {
+        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+        updateMatrix(enemies, player, map);
+
+        current_ts = clock();
+
+        if (_kbhit()) {
+            key = _getch();
+            if (key == 'p') {
+                system("cls");
+                pause_loop(enemies, player, map, out, coord, start_game_ts, current_ts, enemies_killed);
+                return;
+            }
+            player.player_control(map, key);
+        }
+
+        player.check_bomb_loop(map);
+
+        for (int i = 0; i < enemy_count; i++) {
+            if (enemies[i].alive) {
+                if (player.bomb.has_killed(enemies[i].position)) {
+                    enemies[i].alive = false;
+                    enemies_killed++;
+                }
+                else {
+                    enemies[i].check_enemy_movement(map);
+                }
+            }
+        }
+
+        SetConsoleTextAttribute(out, 15);
+        draw_hud(start_game_ts, current_ts, enemies_killed, out);
+        draw(map, out);
+
     }
 }
 
@@ -488,6 +553,6 @@ int main()
     write_map(map);
     //read_map(map);
 
-    menu_loop(enemies, player, map, out, coord, false);
+    menu_loop(enemies, player, map, out, coord);
     return 0;
 }

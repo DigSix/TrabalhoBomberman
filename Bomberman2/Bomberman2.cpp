@@ -10,14 +10,14 @@ using namespace std;
 
 #define m_size 9 /// Please only use >= 5 odd numbers.
 
-#define floor 0
-#define wall 1
-#define brk_wall 2
-#define player 3
-#define enemy 4
-#define bomb 5
-#define plr_and_bb 6
-#define explosion 7
+#define m_floor 0
+#define m_wall 1
+#define m_brk_wall 2
+#define m_player 3
+#define m_enemy 4
+#define m_bomb 5
+#define m_plr_and_bb 6
+#define m_explosion 7
 
 #define max_bombs 1
 
@@ -32,11 +32,6 @@ struct coords {
 
 };
 
-struct coords {
-
-    int x, y;
-
-};
 
 coords directions[4]{
     {0,-1}, //Up = [0]
@@ -67,10 +62,84 @@ bool timer_check(clock_t start_timer, clock_t end_timer, int timer_size) {
 
 }
 
-struct Player {
+struct bomb {
+public:
+    coords position;
+    int bombs_remaning = 1;
+    int range = 3;
+
+private:
+    clock_t start, interval;
+    bool is_bomb_exploded = false;
+    coords explosion_direction;
+
+    void show_explosion(int map[m_size][m_size]) {
+        map[position.y][position.x] == m_explosion;
+        for (int i = 0; i < 4; i++) {
+            for (int j = 1; j <= range; j++) {
+                explosion_direction = directions[i];
+                explosion_direction.x *= j;
+                explosion_direction.y *= j;
+                if (!collision(map, position, m_wall, explosion_direction) && !collision(map, position, m_wall, directions[i])) {
+                    map[position.y + explosion_direction.y][position.x + explosion_direction.x] = m_explosion;
+                }
+            }
+        }
+        bombs_remaning++;
+    }
+    void clear_explosion(int map[m_size][m_size]) {
+        map[position.y][position.x] == m_floor;
+        for (int i = 0; i < 4; i++) {
+            for (int j = 1; j <= range; j++) {
+                explosion_direction = directions[i];
+                explosion_direction.x *= j;
+                explosion_direction.y *= j;
+                if (!collision(map, position, m_wall, explosion_direction) && !collision(map, position, m_wall, directions[i])) {
+                    map[position.y + explosion_direction.y][position.x + explosion_direction.x] = m_floor;
+                }
+            }
+        }
+        position.x = m_size;
+        position.y = m_size;
+    }
 
 public:
-    coords pcoords;
+    void place_bomb(int map[m_size][m_size], coords player) {
+
+        if (bombs_remaning > 0) {
+            position.x = player.x;
+            position.y = player.y;
+            bombs_remaning--;
+            start = clock();
+        }
+
+    }
+
+    void destroy_bomb(int map[m_size][m_size], clock_t end) {
+        if (range > 3) {
+            range = 3;
+        }
+        if (bombs_remaning == 0) {
+            if (!is_bomb_exploded && timer_check(start, end, bomb_timer)) {
+                is_bomb_exploded = true;
+                show_explosion(map);
+                interval = clock();
+            }
+        }
+        if (is_bomb_exploded && timer_check(interval, end, explosion_timer)) {
+            is_bomb_exploded = false;
+            clear_explosion(map);
+            start = clock();
+        }
+    }
+};
+
+struct player {
+
+public:
+    coords position;
+    bomb bomb;
+
     void player_control(int map[m_size][m_size], char key) {
 
         static coords player_direction;
@@ -87,21 +156,26 @@ public:
         case 77: case 'd':
             player_direction = directions[3];
             break;
+        case 32:
+            bomb.place_bomb(map, position);
+            break;
         default:
             return;
         }
 
-        if (!collision(map, pcoords, wall, player_direction) && !collision(map, pcoords, brk_wall, player_direction)) {
-            pcoords.x += player_direction.x;
-            pcoords.y += player_direction.y;
+        if (key != 32) {
+            if (!collision(map, position, m_wall, player_direction) && !collision(map, position, m_brk_wall, player_direction) && !collision(map, position, m_enemy, player_direction)) {
+                position.x += player_direction.x;
+                position.y += player_direction.y;
+            }
         }
     }
 };
 
-struct Enemy {
+struct enemy {
 
 public:
-    coords ecoords;
+    coords position;
 
 private:
     bool is_enemy_moving = false;
@@ -110,9 +184,9 @@ private:
     clock_t start, interval;
 
     void move_enemy(int map[m_size][m_size], coords direction) {
-        if (!collision(map, ecoords, wall, direction) && !collision(map, ecoords, brk_wall, direction) && !collision(map, ecoords, bomb, direction)) {
-            ecoords.x += direction.x;
-            ecoords.y += direction.y;
+        if (!collision(map, position, m_wall, direction) && !collision(map, position, m_brk_wall, direction) && !collision(map, position, m_bomb, direction)) {
+            position.x += direction.x;
+            position.y += direction.y;
         }
         else {
             direction = directions[rand() % 4];
@@ -142,106 +216,50 @@ public:
     }
 };
 
-struct Bomb {
-public:
-    coords bcoords;
-    int bombs_remaning = 1;
-    int range = 1;
-
-private:
-    clock_t start, interval;
-    bool is_bomb_exploded = false;
-
-    void show_explosion(int map[m_size][m_size]) {
-        for (int i = 0; i < 4; i++) {
-            for (int j = 1; j <= range; j++) {
-                if (!collision(map, bcoords, wall, directions[i])) {
-                    map[bcoords.y + (directions[i].y * j)][bcoords.x + (directions[i].x * j)] = explosion;
-                }
-            }
-        }
-        bombs_remaning++;
-    }
-    void clear_explosion(int map[m_size][m_size]) {
-        for (int i = 0; i < 4; i++) {
-            for (int j = 1; j <= range; j++) {
-                if (!collision(map, bcoords, wall, directions[i])) {
-                    map[bcoords.y + (directions[i].y * j)][bcoords.x + (directions[i].x * j)] = floor;
-                }
-            }
-        }
-    }
-
-public:
-    void place_bomb(int map[m_size][m_size], coords Player, char key) {
-        if (key == 32 || key == ' ') {
-            if (bombs_remaning > 0) {
-                bcoords.x = Player.x;
-                bcoords.y = Player.y;
-                bombs_remaning--;
-                start = clock();
-            }
-        }
-    }
-
-    void destroy_bomb(int map[m_size][m_size], clock_t end) {
-        if (!is_bomb_exploded && timer_check(start, end, bomb_timer)) {
-            is_bomb_exploded = true;
-            show_explosion(map);
-            interval = clock();
-        }
-        if (is_bomb_exploded && timer_check(interval, end, explosion_timer)) {
-            is_bomb_exploded = false;
-            clear_explosion(map);
-            start = clock();
-        }
-    }
-};
-
-void drawn_m(int map[m_size][m_size], coords pcoords, coords ecoords, coords bcoords, HANDLE color) {
-
+void drawn(int map[m_size][m_size], HANDLE color) {
     int i = 0, j = 0;
     for (i = 0; i < m_size; i++) {
         for (j = 0; j < m_size; j++) {
 
-            if (((i == pcoords.y) && (j == pcoords.x)) && ((pcoords.x != bcoords.x) && (pcoords.y != bcoords.y))) { /// Player.
-                SetConsoleTextAttribute(color, 12);
-                cout << char(3);
-            }
-
-            if ((i == ecoords.y) && (j == ecoords.x)) { /// Enemy.
-                SetConsoleTextAttribute(color, 15);
-                cout << char(30);
-            }
-
-            if (((i == bcoords.y) && (j == bcoords.x)) && ((pcoords.x != bcoords.x) && (pcoords.y != bcoords.y))) { /// Bobm.
-                SetConsoleTextAttribute(color, 15);
-                cout << char(15);
-            }
-
-            if (((j == pcoords.x) && (j == bcoords.x)) && ((i == pcoords.y) && (i == bcoords.y))) { /// Player and bomb.
-                SetConsoleTextAttribute(color, 15);
-                cout << char(3);
-            }
-
             switch (map[i][j]) {
 
-            case floor: /// Floor.
+            case m_floor: /// Floor.
                 SetConsoleTextAttribute(color, 0);
                 cout << char(219);
                 break;
 
-            case wall: /// Solid wall.
+            case m_wall: /// Solid wall.
                 SetConsoleTextAttribute(color, 8);
                 cout << char(177);
                 break;
 
-            case brk_wall: /// Breakable wall.
+            case m_brk_wall: /// Breakable wall.
                 SetConsoleTextAttribute(color, 15);
                 cout << char(177);
                 break;
 
-            case explosion: /// Kabum!
+            case m_player: /// Player.
+                SetConsoleTextAttribute(color, 12);
+                cout << char(3);
+                break;
+
+            case m_enemy: /// Enemy.
+                SetConsoleTextAttribute(color, 15);
+                cout << char(30);
+                break;
+
+            case m_bomb: /// Bomb!
+                SetConsoleTextAttribute(color, 15);
+                cout << char(15);
+                break;
+
+
+            case m_plr_and_bb: /// Bomb! & Player.
+                SetConsoleTextAttribute(color, 15);
+                cout << char(3);
+                break;
+
+            case m_explosion: /// Kabum!
                 SetConsoleTextAttribute(color, 15);
                 cout << char(15);
                 break;
@@ -253,7 +271,7 @@ void drawn_m(int map[m_size][m_size], coords pcoords, coords ecoords, coords bco
 }
 
 /// Generating map.
-void create_map(int map[m_size][m_size], coords& pcoords, coords& ecoords) {
+void create_map(int map[m_size][m_size], coords& player, coords& enemy) {
 
     int i, j;
 
@@ -262,41 +280,41 @@ void create_map(int map[m_size][m_size], coords& pcoords, coords& ecoords) {
 
             /// Generating side walls and floors.
             if (i == 0 || i == m_size - 1 || j == 0 || j == m_size - 1) {
-                map[i][j] = wall;
+                map[i][j] = m_wall;
             }
             else {
-                map[i][j] = floor;
+                map[i][j] = m_floor;
             }
 
             /// Generating midle walls and breakable walls.
             if (i > 0 && i < m_size - 1 && j > 0 && j < m_size - 1) {
 
                 if (i % 2 == 0 || j % 2 == 0) {
-                    map[i][j] = brk_wall;
+                    map[i][j] = m_brk_wall;
                 }
 
                 if (i % 2 == 0 && j % 2 == 0) {
-                    map[i][j] = wall;
+                    map[i][j] = m_wall;
                 }
 
                 /// Generating side space for the start moves.
                 if (((i == 1 || i == m_size - 2) && j < 3) || ((i == 1 || i == m_size - 2) && j > m_size - 4) || ((j == 1 || j == m_size - 2) && i < 3) || ((j == 1 || j == m_size - 2) && i > m_size - 4)) {
-                    map[i][j] = floor;
+                    map[i][j] = m_floor;
                 }
 
             }
 
             /// Placing enemy.
             if (i == 1 && j == 1) {
-                ecoords.x = j;
-                ecoords.y = i;
+                enemy.x = j;
+                enemy.y = i;
             }
 
             /// Placing player.
             if (i == m_size - 2 && j == m_size - 2) {
-                map[i][j] = player;
-                pcoords.x = j;
-                pcoords.y = i;
+                map[i][j] = m_player;
+                player.x = j;
+                player.y = i;
             }
 
         }
@@ -304,60 +322,34 @@ void create_map(int map[m_size][m_size], coords& pcoords, coords& ecoords) {
 
 }
 
-/// Dranwing objects.
-void drawn(int map[m_size][m_size], HANDLE color) {
-    int i = 0, j = 0;
-    for (i = 0; i < m_size; i++) {
-        for (j = 0; j < m_size; j++) {
-
-            switch (map[i][j]) {
-
-            case floor: /// Floor.
-                SetConsoleTextAttribute(color, 0);
-                cout << char(219);
-                break;
-
-            case wall: /// Solid wall.
-                SetConsoleTextAttribute(color, 8);
-                cout << char(177);
-                break;
-
-            case brk_wall: /// Breakable wall.
-                SetConsoleTextAttribute(color, 15);
-                cout << char(177);
-                break;
-
-            case player: /// Player.
-                SetConsoleTextAttribute(color, 12);
-                cout << char(3);
-                break;
-
-            case enemy: /// Enemy.
-                SetConsoleTextAttribute(color, 15);
-                cout << char(30);
-                break;
-
-            case bomb: /// Bomb!
-                SetConsoleTextAttribute(color, 15);
-                cout << char(15);
-                break;
-
-
-            case plr_and_bb: /// Bomb! & Player.
-                SetConsoleTextAttribute(color, 15);
-                cout << char(3);
-                break;
-
-            case explosion: /// Kabum!
-                SetConsoleTextAttribute(color, 15);
-                cout << char(15);
-                break;
-
+void update_map(int map[m_size][m_size], coords player, coords enemy, coords bomb) {
+    for (int i = 0; i < m_size; i++) {
+        for (int j = 0; j < m_size; j++) {
+            if (map[i][j] == m_wall) {
+                map[i][j] = m_wall;
+            }
+            else if (map[i][j] == m_brk_wall) {
+                map[i][j] = m_brk_wall;
+            }
+            else if (j == enemy.x && i == enemy.y) {
+                map[i][j] = m_enemy;
+            }
+            else if ((j == player.x && i == player.y) && (j == bomb.x && i == bomb.y)) {
+                map[i][j] = m_plr_and_bb;
+            }
+            else if (j == player.x && i == player.y) {
+                map[i][j] = m_player;
+            }
+            else if (j == bomb.x && i == bomb.y) {
+                map[i][j] = m_bomb;
+            }
+            else if (map[i][j] == m_explosion) {
+                map[i][j] = m_explosion;
+            }
+            else {
+                map[i][j] = m_floor;
             }
 
-            if (j == m_size - 1) {
-                cout << "\n";
-            }
         }
     }
 }

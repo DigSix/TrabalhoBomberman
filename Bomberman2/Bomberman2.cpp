@@ -391,28 +391,38 @@ void updateMatrix(Enemy enemies[enemy_count], Player player, int map[m_size][m_s
 
 void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, clock_t time_offset);
 
-void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord) {
+void leave_game(HANDLE out, COORD coord) {
+    system("cls");
+    SetConsoleTextAttribute(out, 15);
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+    cout << "Obrigado por jogar! \n";
+    return;
+}
+
+void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord) {
+    system("cls");
+    SetConsoleTextAttribute(out, 15);
     static char key;
     static int menu_select = 0;
-
     static string menu_options[3] = {
         "Novo jogo",
         "Carregar jogo",
         "Sair",
     };
 
-    for (int i = 0; i < 3; i++) {
-        if (menu_select == i) {
-            cout << "-> ";
-        }
-        else {
-            cout << "   ";
-        }
-        cout << menu_options[i] << "\n";
-    }
-
     while (true) {
+        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+
+        for (int i = 0; i < 3; i++) {
+            if (menu_select == i) {
+                cout << "-> ";
+            }
+            else {
+                cout << "   ";
+            }
+            cout << menu_options[i] << "\n";
+        }
+
         if (_kbhit()) {
             key = _getch();
             switch (key) {
@@ -422,23 +432,80 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
                     game_loop(enemies, player, map, out, coord, 0);
                     return;
                 case 2:
+                    leave_game(out, coord);
                     return;
                 }
             case 72: case 'w':
                 if (menu_select > 0) menu_select--;
-                menu_loop(enemies, player, map, out, coord);
-                return;
+                break;
             case 80: case 's':
                 if (menu_select < 2) menu_select++;
-                menu_loop(enemies, player, map, out, coord);
-                return;
+                break;
             }
         }
     }
 }
 
+void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t game_end_ts, Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord) {
+    system("cls");
+    SetConsoleTextAttribute(out, 15);
+    static char key;
+    static int s_time, minutes, seconds, menu_select = 0;
+    static string menu_options[2] = {
+        "Novo jogo",
+        "Voltar para menu"
+    };
+    s_time = interval_to_ms(game_start_ts, game_end_ts) / 1000;
+    seconds = s_time % 60;
+    minutes = s_time / 60;
+
+    string end_message = win ? "Voce venceu!" : "Voce perdeu!";
+    while (true) {
+        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+
+        cout << end_message << "\n";
+        cout << "Inimigos mortos: " << enemies_killed << "\n";
+        cout << "Tempo de jogo: " << minutes << ":";
+        if (seconds < 10) cout << "0";
+        cout << seconds << "\n \n";
+        for (int i = 0; i < 2; i++) {
+            if (menu_select == i) {
+                cout << "-> ";
+            }
+            else {
+                cout << "   ";
+            }
+            cout << menu_options[i] << "\n";
+        }
+
+
+        if (_kbhit()) {
+            key = _getch();
+            switch (key) {
+            case ' ':
+                switch (menu_select) {
+                case 0:
+                    game_loop(enemies, player, map, out, coord, 0);
+                    return;
+                case 1:
+                    menu_loop(enemies, player, map, out, coord);
+                    return;
+                }
+            case 72: case 'w':
+                if (menu_select > 0) menu_select--;
+                break;
+            case 80: case 's':
+                if (menu_select < 1) menu_select++;
+                break;
+            }
+
+        }
+    }
+}
+
 void pause_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, clock_t start_game_ts, clock_t final_game_ts, int enemies_killed) {
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+    system("cls");
+    SetConsoleTextAttribute(out, 15);
     static char key;
     static int menu_select = 0;
 
@@ -447,18 +514,20 @@ void pause_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_siz
         "Voltar para menu",
     };
 
-    draw_hud(start_game_ts, final_game_ts, enemies_killed, out);
-    for (int i = 0; i < 2; i++) {
-        if (menu_select == i) {
-            cout << "-> ";
-        }
-        else {
-            cout << "   ";
-        }
-        cout << menu_options[i] << "\n";
-    }
-
     while (true) {
+        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+
+        draw_hud(start_game_ts, final_game_ts, enemies_killed, out);
+        for (int i = 0; i < 2; i++) {
+            if (menu_select == i) {
+                cout << "-> ";
+            }
+            else {
+                cout << "   ";
+            }
+            cout << menu_options[i] << "\n";
+        }
+
         if (_kbhit()) {
             key = _getch();
             switch (key) {
@@ -474,12 +543,10 @@ void pause_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_siz
                 }
             case 72: case 'w':
                 if (menu_select > 0) menu_select--;
-                pause_loop(enemies, player, map, out, coord, start_game_ts, final_game_ts, enemies_killed);
-                return;
+                break;
             case 80: case 's':
                 if (menu_select < 1) menu_select++;
-                pause_loop(enemies, player, map, out, coord, start_game_ts, final_game_ts, enemies_killed);
-                return;
+                break;
             }
         }
     }
@@ -491,7 +558,7 @@ void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
     static char key;
     static int enemies_killed = 0;
 
-    while (!player.check_death(map)) {
+    while (!player.check_death(map) && enemies_killed < enemy_count) {
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
         updateMatrix(enemies, player, map);
 
@@ -500,7 +567,6 @@ void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
         if (_kbhit()) {
             key = _getch();
             if (key == 'p') {
-                system("cls");
                 pause_loop(enemies, player, map, out, coord, start_game_ts, current_ts, enemies_killed);
                 return;
             }
@@ -526,6 +592,8 @@ void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
         draw(map, out);
 
     }
+    bool victory = enemies_killed == enemy_count ? true : false;
+    end_game_loop(victory, enemies_killed, start_game_ts, clock(), enemies, player, map, out, coord);
 }
 
 int main()

@@ -40,7 +40,7 @@ coords directions[5]{
     {0,0},
 };
 
-bool collision(int map[m_size][m_size], coords position, int collider, coords direction) {
+bool collision(int **map, coords position, int collider, coords direction) {
     if (map[position.y + direction.y][position.x + direction.x] == collider) {
         return true;
     }
@@ -78,7 +78,7 @@ public:
         bomb_start_ts = clock();
     }
 
-    void destroy(int map[m_size][m_size]) {
+    void destroy(int **map) {
         for (int i = 0; i < 4; i++) {
             if (map[position.y+directions[i].y][position.x + directions[i].x] == m_brk_wall) {
                 map[position.y + directions[i].y][position.x + directions[i].x] = m_floor;
@@ -112,7 +112,7 @@ public:
     int bombs_remaining = max_bombs;
     Bomb bomb;
 
-    void check_bomb_loop(int map[m_size][m_size]) {
+    void check_bomb_loop(int **map) {
         if (bombs_remaining == 0) {
             if (!bomb.exploded && timer_check(bomb.bomb_start_ts, clock(), bomb_timer)) {
                 bomb.destroy(map);
@@ -125,7 +125,7 @@ public:
 
     }
 
-    bool check_death(int map[m_size][m_size]) {
+    bool check_death(int **map) {
         for (int i = 0; i < 4; i++) {
             if (collision(map, position, m_enemy, directions[i])) {
                 return true;
@@ -138,7 +138,7 @@ public:
 
     }
 
-    void player_control(int map[m_size][m_size], char key) {
+    void player_control(int **map, char key) {
         switch (key) {
         case 72: case 'w':
             player_direction = directions[0];
@@ -182,7 +182,7 @@ public:
     coords sort_direction;
     int sort_range;
 
-    void move_enemy(int map[m_size][m_size], coords direction) {
+    void move_enemy(int **map, coords direction) {
         if (!collision(map, position, m_wall, direction) && !collision(map, position, m_brk_wall, direction)) {
             position.x += direction.x;
             position.y += direction.y;
@@ -193,7 +193,7 @@ public:
         }
     }
 
-    void check_enemy_movement(int map[m_size][m_size]) {
+    void check_enemy_movement(int **map) {
 
         if (!is_moving && timer_check(movement_start_ts, clock(), enemy_timer)) {
             sort_direction = directions[rand() % 4];
@@ -215,15 +215,15 @@ public:
     }
 };
 
-void create_map(int map[m_size][m_size]) {
+void create_map(int **map, int rows, int cols) {
 
     int i, j;
 
-    for (i = 0; i < m_size; i++) {
-        for (j = 0; j < m_size; j++) {
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
 
 
-            if (i == 0 || i == m_size - 1 || j == 0 || j == m_size - 1) {
+            if (i == 0 || i == rows - 1 || j == 0 || j == cols - 1) {
                 map[i][j] = m_wall;
             }
             else if (j == 4) {
@@ -238,10 +238,10 @@ void create_map(int map[m_size][m_size]) {
 
 }
 
-void draw(int map[m_size][m_size], HANDLE color) {
+void draw(int **map, int rows, int cols, HANDLE color) {
     int i = 0, j = 0;
-    for (i = 0; i < m_size; i++) {
-        for (j = 0; j < m_size; j++) {
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < cols; j++) {
 
             switch (map[i][j]) {
 
@@ -288,7 +288,7 @@ void draw(int map[m_size][m_size], HANDLE color) {
 
             }
 
-            if (j == m_size - 1) {
+            if (j == cols - 1) {
                 cout << "\n";
             }
         }
@@ -315,39 +315,43 @@ void draw_message(string message) {
 
 }
 
-void clear() {
-    int i, j;
-    for (i = 0; i < m_size + 1; i++) {
-        for (j = 0; j < m_size; j++) {
-            cout << char(219);
-            if (j == m_size - 1) {
-                cout << "\n";
-            }
-        }
+void read_map(int **map, int &rows, int &cols) {
+    for (int i = 0; i < rows; i++) {
+        delete[]map[i];
     }
-}
-
-void read_map(int map[m_size][m_size]) {
+    delete[]map;
     ifstream new_map;
-    new_map.open("New_map.txt");
-    for (int i = 0; i < m_size; i++) {
-        for (int j = 0; j < m_size; j++) {
+    new_map.open("map1.txt");
+    new_map >> rows;
+    new_map >> cols;
+    
+    map = new int* [rows];
+    for (int i = 0; i < rows; i++) {
+        map[i] = new int[cols];
+    }
+
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
             new_map >> map[i][j];
         }
     }
 
 }
 
-void write_map(int map[m_size][m_size]) {
+void save_map(int **map, int rows, int cols) {
     ofstream my_map;
-    my_map.open("My_map.txt");
-    for (int i = 0; i < m_size; i++) {
-        for (int j = 0; j < m_size; j++) {
+    my_map.open("save.txt");
+    my_map << rows;
+    my_map << ' ';
+    my_map << cols;
+    my_map << "\n";
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
             my_map << map[i][j];
-            if (j < m_size - 1) {
-                my_map << " ";
+            if (j < cols - 1) {
+                my_map << ' ';
             }
-            if (j == m_size - 1) {
+            if (j == cols - 1) {
                 my_map << "\n";
             }
         }
@@ -355,9 +359,9 @@ void write_map(int map[m_size][m_size]) {
     my_map.close();
 }
 
-void updateMatrix(Enemy enemies[enemy_count], Player player, int map[m_size][m_size]) {
-    for (int i = 0; i < m_size; i++) {
-        for (int j = 0; j < m_size; j++) {
+void updateMatrix(Enemy enemies[enemy_count], Player player, int**map, int rows, int cols) {
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
             if (map[i][j] != m_wall && map[i][j] != m_brk_wall) {
                 map[i][j] = m_floor;
             }
@@ -389,7 +393,7 @@ void updateMatrix(Enemy enemies[enemy_count], Player player, int map[m_size][m_s
     }
 }
 
-void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, clock_t time_offset);
+void game_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, int cols, HANDLE out, COORD coord, clock_t time_offset);
 
 void leave_game(HANDLE out, COORD coord) {
     system("cls");
@@ -399,7 +403,7 @@ void leave_game(HANDLE out, COORD coord) {
     return;
 }
 
-void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord) {
+void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, int cols, HANDLE out, COORD coord) {
     system("cls");
     SetConsoleTextAttribute(out, 15);
     static char key;
@@ -429,7 +433,7 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
             case ' ':
                 switch (menu_select) {
                 case 0:
-                    game_loop(enemies, player, map, out, coord, 0);
+                    game_loop(enemies, player, map, rows, cols, out, coord, 0);
                     return;
                 case 2:
                     leave_game(out, coord);
@@ -446,7 +450,7 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
     }
 }
 
-void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t game_end_ts, Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord) {
+void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t game_end_ts, Enemy enemies[enemy_count], Player player, int **map, int rows, int cols, HANDLE out, COORD coord) {
     system("cls");
     SetConsoleTextAttribute(out, 15);
     static char key;
@@ -485,10 +489,10 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
             case ' ':
                 switch (menu_select) {
                 case 0:
-                    game_loop(enemies, player, map, out, coord, 0);
+                    game_loop(enemies, player, map, rows, cols, out, coord, 0);
                     return;
                 case 1:
-                    menu_loop(enemies, player, map, out, coord);
+                    menu_loop(enemies, player, map, rows, cols, out, coord);
                     return;
                 }
             case 72: case 'w':
@@ -503,22 +507,24 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
     }
 }
 
-void pause_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, clock_t start_game_ts, clock_t final_game_ts, int enemies_killed) {
+void pause_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, int cols, HANDLE out, COORD coord, clock_t start_game_ts, clock_t final_game_ts, int enemies_killed) {
     system("cls");
     SetConsoleTextAttribute(out, 15);
     static char key;
     static int menu_select = 0;
+    bool saved = false;
 
-    static string menu_options[2] = {
+    static string menu_options[3] = {
         "Continuar",
+        "Salvar jogo",
         "Voltar para menu",
     };
 
     while (true) {
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-
         draw_hud(start_game_ts, final_game_ts, enemies_killed, out);
-        for (int i = 0; i < 2; i++) {
+
+        for (int i = 0; i < 3; i++) {
             if (menu_select == i) {
                 cout << "-> ";
             }
@@ -527,6 +533,7 @@ void pause_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_siz
             }
             cout << menu_options[i] << "\n";
         }
+        if (saved) cout << "\n O jogo foi salvo.";
 
         if (_kbhit()) {
             key = _getch();
@@ -534,25 +541,29 @@ void pause_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_siz
             case ' ':
                 switch (menu_select) {
                 case 0:
-                    game_loop(enemies, player, map, out, coord, final_game_ts-start_game_ts);
+                    game_loop(enemies, player, map, rows, cols, out, coord, final_game_ts-start_game_ts);
                     return;
                 case 1:
-                    system("cls");
-                    menu_loop(enemies, player, map, out, coord);
+                    save_map(map, rows, cols);
+                    saved = true;
+                    break;
+                case 2:
+                    menu_loop(enemies, player, map, rows, cols, out, coord);
                     return;
                 }
+                break;
             case 72: case 'w':
                 if (menu_select > 0) menu_select--;
                 break;
             case 80: case 's':
-                if (menu_select < 1) menu_select++;
+                if (menu_select < 2) menu_select++;
                 break;
             }
         }
     }
 }
 
-void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size], HANDLE out, COORD coord, clock_t time_offset=0) {
+void game_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, int cols, HANDLE out, COORD coord, clock_t time_offset=0) {
     system("cls");
     clock_t start_game_ts = clock()-time_offset, current_ts;
     static char key;
@@ -560,14 +571,14 @@ void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
 
     while (!player.check_death(map) && enemies_killed < enemy_count) {
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-        updateMatrix(enemies, player, map);
+        updateMatrix(enemies, player, map, rows, cols);
 
         current_ts = clock();
 
         if (_kbhit()) {
             key = _getch();
             if (key == 'p') {
-                pause_loop(enemies, player, map, out, coord, start_game_ts, current_ts, enemies_killed);
+                pause_loop(enemies, player, map, rows, cols, out, coord, start_game_ts, current_ts, enemies_killed);
                 return;
             }
             player.player_control(map, key);
@@ -589,11 +600,11 @@ void game_loop(Enemy enemies[enemy_count], Player player, int map[m_size][m_size
 
         SetConsoleTextAttribute(out, 15);
         draw_hud(start_game_ts, current_ts, enemies_killed, out);
-        draw(map, out);
+        draw(map, rows, cols, out);
 
     }
     bool victory = enemies_killed == enemy_count ? true : false;
-    end_game_loop(victory, enemies_killed, start_game_ts, clock(), enemies, player, map, out, coord);
+    end_game_loop(victory, enemies_killed, start_game_ts, clock(), enemies, player, map, rows, cols, out, coord);
 }
 
 int main()
@@ -610,17 +621,23 @@ int main()
     coord.X = CX;
     coord.Y = CY;
 
-    int map[m_size][m_size];
+    int rows = 1;
+    int cols = 1;
+    int** map;
+    map = new int* [rows];
+    for (int i = 0; i < rows; i++) {
+        map[i] = new int[cols];
+    }
+
     Player player; 
     Enemy enemies[enemy_count];
     for (int i = 0; i < enemy_count; i++) {
         enemies[i].position = { i + 1, i + 1 };
     }
 
-    create_map(map);
-    write_map(map);
-    //read_map(map);
+    //create_map(map, rows, cols);
+    read_map(map, rows, cols);
 
-    menu_loop(enemies, player, map, out, coord);
+    menu_loop(enemies, player, map, rows, cols, out, coord);
     return 0;
 }

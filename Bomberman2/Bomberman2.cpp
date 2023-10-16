@@ -315,7 +315,7 @@ void draw_message(string message) {
 
 }
 
-void read_map(int **map, int &rows, int &cols) {
+void read_map(int **map, int &rows, int &cols, Player player, Enemy enemies[enemy_count]) {
     for (int i = 0; i < rows; i++) {
         delete[]map[i];
     }
@@ -330,14 +330,23 @@ void read_map(int **map, int &rows, int &cols) {
         map[i] = new int[cols];
     }
 
+    int enemy_spawn_counter = 0;
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             new_map >> map[i][j];
-        }
-    }
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            cout << map[i][j];
+            switch (map[i][j]) {
+                case m_enemy:
+                    enemies[enemy_spawn_counter].position.y = i;
+                    enemies[enemy_spawn_counter].position.x = j;
+                    enemy_spawn_counter++;
+                    break;
+                case m_player:
+                    player.position.y = i;
+                    player.position.x = j;
+                    break;
+                default:
+                    break;
+            }
         }
     }
 }
@@ -345,7 +354,6 @@ void read_map(int **map, int &rows, int &cols) {
 void save_map(int **map, int rows, int cols) {
     ofstream my_map;
     my_map.open("save.txt");
-    cout << my_map.is_open();
     my_map << rows;
     my_map << ' ';
     my_map << cols;
@@ -362,7 +370,6 @@ void save_map(int **map, int rows, int cols) {
         }
     }
     my_map.close();
-    cout << my_map.is_open();
 }
 
 void updateMatrix(Enemy enemies[enemy_count], Player player, int**map, int rows, int cols) {
@@ -643,7 +650,7 @@ int main()
     }
 
     //create_map(map, rows, cols);
-    read_map(map, rows, cols);
+    read_map(map, rows, cols, player, enemies);
 
     //menu_loop(enemies, player, map, rows, cols, out, coord);
     return 0;

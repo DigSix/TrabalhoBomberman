@@ -315,45 +315,43 @@ void draw_message(string message) {
 
 }
 
-void read_map(int **map, int &rows, int &cols, Player player, Enemy enemies[enemy_count]) {
+int** read_map(int **map, int &rows, int &cols, Player player, Enemy enemies[enemy_count]) {
     for (int i = 0; i < rows; i++) {
         delete[]map[i];
     }
     delete[]map;
-    ifstream new_map;
-    new_map.open("map1.txt");
-    new_map >> rows;
-    new_map >> cols;
+    ifstream map_file;
+    map_file.open("C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\map1.txt");
+    map_file >> rows;
+    map_file >> cols;
     
-    map = new int* [rows];
+    int **new_map = new int* [rows];
     for (int i = 0; i < rows; i++) {
-        map[i] = new int[cols];
+        new_map[i] = new int[cols];
     }
 
     int enemy_spawn_counter = 0;
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
-            new_map >> map[i][j];
-            switch (map[i][j]) {
-                case m_enemy:
-                    enemies[enemy_spawn_counter].position.y = i;
-                    enemies[enemy_spawn_counter].position.x = j;
-                    enemy_spawn_counter++;
-                    break;
-                case m_player:
-                    player.position.y = i;
-                    player.position.x = j;
-                    break;
-                default:
-                    break;
+            map_file >> new_map[i][j];
+            if (new_map[i][j] == m_enemy) {
+                enemies[enemy_spawn_counter].position.y = i;
+                enemies[enemy_spawn_counter].position.x = j;
+                enemy_spawn_counter++;
+            }
+            else if(new_map[i][j] == m_player){
+                player.position.y = i;
+                player.position.x = j;
             }
         }
     }
+    map_file.close();
+    return new_map;
 }
 
 void save_map(int **map, int rows, int cols) {
     ofstream my_map;
-    my_map.open("save.txt");
+    my_map.open("C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\save.txt");
     my_map << rows;
     my_map << ' ';
     my_map << cols;
@@ -446,6 +444,7 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
             case ' ':
                 switch (menu_select) {
                 case 0:
+                    map = read_map(map, rows, cols, player, enemies);
                     game_loop(enemies, player, map, rows, cols, out, coord, 0);
                     return;
                 case 2:
@@ -580,7 +579,7 @@ void game_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
     system("cls");
     clock_t start_game_ts = clock()-time_offset, current_ts;
     static char key;
-    static int enemies_killed = 0;
+    int enemies_killed = 0;
 
     while (!player.check_death(map) && enemies_killed < enemy_count) {
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
@@ -645,13 +644,9 @@ int main()
 
     Player player; 
     Enemy enemies[enemy_count];
-    for (int i = 0; i < enemy_count; i++) {
-        enemies[i].position = { i + 1, i + 1 };
-    }
 
     //create_map(map, rows, cols);
-    read_map(map, rows, cols, player, enemies);
 
-    //menu_loop(enemies, player, map, rows, cols, out, coord);
+    menu_loop(enemies, player, map, rows, cols, out, coord);
     return 0;
 }

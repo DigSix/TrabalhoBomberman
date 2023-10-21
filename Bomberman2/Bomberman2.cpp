@@ -107,7 +107,7 @@ public:
 struct Player {
 
 public:
-    coords position = { 5,5 };
+    coords position;
     coords player_direction;
     int bombs_remaining = max_bombs;
     Bomb bomb;
@@ -215,29 +215,6 @@ public:
     }
 };
 
-void create_map(int **map, int rows, int cols) {
-
-    int i, j;
-
-    for (i = 0; i < rows; i++) {
-        for (j = 0; j < cols; j++) {
-
-
-            if (i == 0 || i == rows - 1 || j == 0 || j == cols - 1) {
-                map[i][j] = m_wall;
-            }
-            else if (j == 4) {
-                map[i][j] = m_brk_wall;
-            }
-            else {
-                map[i][j] = m_floor;
-            }
-
-        }
-    }
-
-}
-
 void draw(int **map, int rows, int cols, HANDLE color) {
     int i = 0, j = 0;
     for (i = 0; i < rows; i++) {
@@ -315,7 +292,7 @@ void draw_message(string message) {
 
 }
 
-int** read_map(int **map, int &rows, int &cols, Player player, Enemy enemies[enemy_count]) {
+int** read_map(int **map, int &rows, int &cols, Player &player, Enemy enemies[enemy_count]) {
     for (int i = 0; i < rows; i++) {
         delete[]map[i];
     }
@@ -368,6 +345,11 @@ void save_map(int **map, int rows, int cols) {
         }
     }
     my_map.close();
+}
+
+void reset_game(Enemy enemies[enemy_count], Player &player, int** map) {
+    player.bomb.exploded = false;
+    player.bombs_remaining = max_bombs;
 }
 
 void updateMatrix(Enemy enemies[enemy_count], Player player, int**map, int rows, int cols) {
@@ -444,6 +426,7 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
             case ' ':
                 switch (menu_select) {
                 case 0:
+                    reset_game(enemies, player, map);
                     map = read_map(map, rows, cols, player, enemies);
                     game_loop(enemies, player, map, rows, cols, out, coord, 0);
                     return;
@@ -501,6 +484,8 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
             case ' ':
                 switch (menu_select) {
                 case 0:
+                    reset_game(enemies, player, map);
+                    map = read_map(map, rows, cols, player, enemies);
                     game_loop(enemies, player, map, rows, cols, out, coord, 0);
                     return;
                 case 1:
@@ -579,6 +564,7 @@ void game_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
     system("cls");
     clock_t start_game_ts = clock()-time_offset, current_ts;
     static char key;
+    // Colocar valor inicial para variável de inimigos mortos dinâmica
     int enemies_killed = 0;
 
     while (!player.check_death(map) && enemies_killed < enemy_count) {
@@ -644,8 +630,6 @@ int main()
 
     Player player; 
     Enemy enemies[enemy_count];
-
-    //create_map(map, rows, cols);
 
     menu_loop(enemies, player, map, rows, cols, out, coord);
     return 0;

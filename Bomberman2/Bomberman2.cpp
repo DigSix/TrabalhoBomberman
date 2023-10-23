@@ -296,7 +296,7 @@ void draw_message(string message) {
 
 }
 
-int** read_map(int **map, int &rows, int &cols, Player &player, Enemy enemies[enemy_count], string map_path) {
+int** read_map(int **map, int &rows, int &cols, Player &player, Enemy enemies[enemy_count], string map_path, clock_t& time_offset) {
     for (int i = 0; i < rows; i++) {
         delete[]map[i];
     }
@@ -326,11 +326,14 @@ int** read_map(int **map, int &rows, int &cols, Player &player, Enemy enemies[en
             }
         }
     }
+    if (!map_file.eof()) {
+        map_file >> time_offset;
+    }
     map_file.close();
     return new_map;
 }
 
-void save_map(int **map, int rows, int cols) {
+void save_map(int **map, int rows, int cols, clock_t elapsed_time) {
     ofstream my_map;
     my_map.open("C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\save.txt");
     my_map << rows;
@@ -339,15 +342,11 @@ void save_map(int **map, int rows, int cols) {
     my_map << "\n";
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
-            my_map << map[i][j];
-            if (j < cols - 1) {
-                my_map << ' ';
-            }
-            if (j == cols - 1) {
-                my_map << "\n";
-            }
+            my_map << map[i][j] << " ";
         }
+        my_map << "\n";
     }
+    my_map << elapsed_time;
     my_map.close();
 }
 
@@ -403,6 +402,7 @@ void leave_game(HANDLE out, COORD coord) {
 void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, int cols, HANDLE out, COORD coord) {
     system("cls");
     SetConsoleTextAttribute(out, 15);
+    clock_t time_offset = 0;
     static char key;
     static int menu_select = 0;
     static string menu_options[3] = {
@@ -433,8 +433,13 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
                 switch (menu_select) {
                 case 0:
                     reset_game(enemies, player, map);
-                    map = read_map(map, rows, cols, player, enemies, map_options[map_select]);
-                    game_loop(enemies, player, map, rows, cols, out, coord, 0);
+                    map = read_map(map, rows, cols, player, enemies, map_options[map_select], time_offset);
+                    game_loop(enemies, player, map, rows, cols, out, coord, time_offset);
+                    return;
+                case 1:
+                    reset_game(enemies, player, map);
+                    map = read_map(map, rows, cols, player, enemies, "C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\save.txt", time_offset);
+                    game_loop(enemies, player, map, rows, cols, out, coord, time_offset);
                     return;
                 case 2:
                     leave_game(out, coord);
@@ -461,6 +466,7 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
 void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t game_end_ts, Enemy enemies[enemy_count], Player player, int **map, int rows, int cols, HANDLE out, COORD coord) {
     system("cls");
     SetConsoleTextAttribute(out, 15);
+    clock_t time_offset = 0;
     static char key;
     static int s_time, minutes, seconds, menu_select = 0;
     static string menu_options[2] = {
@@ -500,8 +506,8 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
                 switch (menu_select) {
                 case 0:
                     reset_game(enemies, player, map);
-                    map = read_map(map, rows, cols, player, enemies, map_options[map_select]);
-                    game_loop(enemies, player, map, rows, cols, out, coord, 0);
+                    map = read_map(map, rows, cols, player, enemies, map_options[map_select], time_offset);
+                    game_loop(enemies, player, map, rows, cols, out, coord, time_offset);
                     return;
                 case 1:
                     menu_loop(enemies, player, map, rows, cols, out, coord);
@@ -562,7 +568,7 @@ void pause_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, 
                     game_loop(enemies, player, map, rows, cols, out, coord, final_game_ts-start_game_ts);
                     return;
                 case 1:
-                    save_map(map, rows, cols);
+                    save_map(map, rows, cols, final_game_ts - start_game_ts);
                     saved = true;
                     break;
                 case 2:
@@ -626,6 +632,16 @@ void game_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
     end_game_loop(victory, enemies_killed, start_game_ts, clock(), enemies, player, map, rows, cols, out, coord);
 }
 
+int** initialize_map(int &rows, int &cols) {
+    int** new_map;
+    new_map = new int* [rows];
+    for (int i = 0; i < rows; i++) {
+        new_map[i] = new int[cols];
+    }
+    new_map[0][0] = 1;
+    return new_map;
+}
+
 int main()
 {
     srand(time(NULL));
@@ -640,15 +656,8 @@ int main()
     coord.X = CX;
     coord.Y = CY;
 
-    int rows = 1;
-    int cols = 1;
-    // Função de inicializar mapa
-    int** map;
-    map = new int* [rows];
-    for (int i = 0; i < rows; i++) {
-        map[i] = new int[cols];
-    }
-    map[0][0] = 1;
+    int rows = 1, cols = 1;
+    int** map = initialize_map(rows, cols);
 
     Player player; 
     Enemy enemies[enemy_count];

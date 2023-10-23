@@ -26,10 +26,14 @@ using namespace std;
 #define enemy_timer 500
 #define enemy_interval_timer enemy_timer / 3
 
+int map_select = 0;
+string map_options[2] = {
+    "C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\map1.txt",
+    "C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\map2.txt"
+};
+
 struct coords {
-
     int x, y;
-
 };
 
 coords directions[5]{
@@ -292,13 +296,13 @@ void draw_message(string message) {
 
 }
 
-int** read_map(int **map, int &rows, int &cols, Player &player, Enemy enemies[enemy_count]) {
+int** read_map(int **map, int &rows, int &cols, Player &player, Enemy enemies[enemy_count], string map_path) {
     for (int i = 0; i < rows; i++) {
         delete[]map[i];
     }
     delete[]map;
     ifstream map_file;
-    map_file.open("C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\map1.txt");
+    map_file.open(map_path);
     map_file >> rows;
     map_file >> cols;
     
@@ -417,7 +421,9 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
             else {
                 cout << "   ";
             }
-            cout << menu_options[i] << "\n";
+            cout << menu_options[i];
+            if (i == 0) cout << " (Mapa " << map_select+1 << ")";
+            cout << "\n";
         }
 
         if (_kbhit()) {
@@ -427,7 +433,7 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
                 switch (menu_select) {
                 case 0:
                     reset_game(enemies, player, map);
-                    map = read_map(map, rows, cols, player, enemies);
+                    map = read_map(map, rows, cols, player, enemies, map_options[map_select]);
                     game_loop(enemies, player, map, rows, cols, out, coord, 0);
                     return;
                 case 2:
@@ -440,7 +446,14 @@ void menu_loop(Enemy enemies[enemy_count], Player player, int **map, int rows, i
             case 80: case 's':
                 if (menu_select < 2) menu_select++;
                 break;
+            case 'n':
+                if (map_select > 0) map_select--;
+                break;
+            case 'm':
+                if(map_select < 1) map_select++;
+                break;
             }
+
         }
     }
 }
@@ -474,7 +487,9 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
             else {
                 cout << "   ";
             }
-            cout << menu_options[i] << "\n";
+            cout << menu_options[i];
+            if (i == 0) cout << " (Mapa " << map_select+1 << ")";
+            cout << "\n";
         }
 
 
@@ -485,7 +500,7 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
                 switch (menu_select) {
                 case 0:
                     reset_game(enemies, player, map);
-                    map = read_map(map, rows, cols, player, enemies);
+                    map = read_map(map, rows, cols, player, enemies, map_options[map_select]);
                     game_loop(enemies, player, map, rows, cols, out, coord, 0);
                     return;
                 case 1:
@@ -497,6 +512,12 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
                 break;
             case 80: case 's':
                 if (menu_select < 1) menu_select++;
+                break;
+            case 'n':
+                if (map_select > 0) map_select--;
+                break;
+            case 'm':
+                if (map_select < 1) map_select++;
                 break;
             }
 
@@ -621,6 +642,7 @@ int main()
 
     int rows = 1;
     int cols = 1;
+    // Função de inicializar mapa
     int** map;
     map = new int* [rows];
     for (int i = 0; i < rows; i++) {

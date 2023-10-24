@@ -46,21 +46,21 @@ coords directions[5]{
     {0,0},
 };
 
-bool collision(int **map, coords position, int collider, coords direction) {
-    if (map[position.y + direction.y][position.x + direction.x] == collider) {
+bool out_of_bounds(coords position, coords direction, int rows, int cols) {
+    if (position.x + direction.x < 0 || position.x + direction.x >= rows || position.y + direction.y < 0 || position.y + direction.y >= cols) {
+        return true;
+    }
+    return false;
+}
+
+bool collision(int **map, int rows, int cols, coords position, int collider, coords direction) {
+    if (!out_of_bounds(position, direction, rows, cols) && map[position.y + direction.y][position.x + direction.x] == collider) {
         return true;
     }
     else {
         return false;
     }
 
-}
-
-bool out_of_bounds(coords position, coords direction, int rows, int cols) {
-    if (position.x + direction.x < 0 || position.x + direction.x >= rows || position.y + direction.y < 0 || position.y + direction.y >= cols) {
-        return true;
-    }
-    return false;
 }
 
 int interval_to_ms(clock_t start_ts, clock_t end_ts) {
@@ -78,6 +78,51 @@ bool timer_check(clock_t start_ts, clock_t end_ts, int timer_size) {
 
 }
 
+struct Enemy {
+
+public:
+    coords position;
+    bool alive = true;
+    bool is_moving = false;
+
+    clock_t movement_start_ts;
+    clock_t interval_start_ts;
+    coords sort_direction;
+    int sort_range;
+
+    void move_enemy(int** map, int rows, int cols, coords direction) {
+        if (!out_of_bounds(position, direction, rows, cols) && !collision(map, rows, cols, position, m_wall, direction) && !collision(map, rows, cols, position, m_brk_wall, direction) && !collision(map, rows, cols, position, m_bomb, direction)) {
+            position.x += direction.x;
+            position.y += direction.y;
+        }
+        else {
+            direction = directions[rand() % 4];
+            move_enemy(map, rows, cols, direction);
+        }
+    }
+
+    void check_enemy_movement(int** map, int rows, int cols) {
+
+        if (!is_moving && timer_check(movement_start_ts, clock(), enemy_timer)) {
+            sort_direction = directions[rand() % 4];
+            sort_range = (rand() % 3) + 1;
+            interval_start_ts = clock();
+            is_moving = true;
+        }
+        if (is_moving && timer_check(interval_start_ts, clock(), enemy_timer)) {
+            move_enemy(map, rows, cols, sort_direction);
+            interval_start_ts = clock();
+            if (sort_range == 0) {
+                movement_start_ts = clock();
+                is_moving = false;
+            }
+            else {
+                sort_range--;
+            }
+        }
+    }
+};
+
 struct Bomb {
 public:
     coords position;
@@ -91,21 +136,23 @@ public:
         bomb_start_ts = clock();
     }
 
-    void recursive_explosion(int** map, int rows, int cols, coords position, int depth) {
+    void recursive_explosion(int** map, int** structural_map, int rows, int cols, coords position, int depth) {
         for (int i = 0; i < 4; i++) {
-            if (!out_of_bounds(position, directions[i], rows, cols) && map[position.y + directions[i].y][position.x + directions[i].x] != m_wall) {
+            if (!out_of_bounds(position, directions[i], rows, cols) && structural_map[position.y + directions[i].y][position.x + directions[i].x] != m_wall) {
+                structural_map[position.y + directions[i].y][position.x + directions[i].x] = m_floor;
                 map[position.y + directions[i].y][position.x + directions[i].x] = m_explosion;
                 if (depth-1) {
                     coords new_cell = { position.x + directions[i].x ,position.y + directions[i].y };
-                    recursive_explosion(map, rows, cols, new_cell, depth - 1);
+                    recursive_explosion(map, structural_map, rows, cols, new_cell, depth - 1);
                 }
             }
         }
     }
 
-    void destroy(int **map, int rows, int cols, int explosion_level) {
+    void destroy(int** map, int **structural_map, int rows, int cols, int explosion_level) {
+        structural_map[position.y][position.x] = m_floor;
         map[position.y][position.x] = m_explosion;
-        recursive_explosion(map, rows, cols,  position, explosion_level);
+        recursive_explosion(map, structural_map, rows, cols,  position, explosion_level);
         exploded = true;
         explosion_start_ts = clock();
         
@@ -154,12 +201,12 @@ public:
         current_powers[powerup_number].usage_count++;
     }
 
-    void check_bomb_loop(int **map, int rows, int cols) {
+    void check_bomb_loop(int **map, int**structural_map, int rows, int cols) {
         clock_t current_ts = clock();
         if (bombs_remaining == 0) {
             if (!bomb.exploded && timer_check(bomb.bomb_start_ts, current_ts, bomb_timer)) {
                 int explosion_level = current_powers[1].active ? 5 : 1;
-                bomb.destroy(map, rows, cols, explosion_level);
+                bomb.destroy(map, structural_map, rows, cols, explosion_level);
             }
             else if (bomb.exploded && timer_check(bomb.explosion_start_ts, current_ts, explosion_timer)) {
                 bomb.clear_explosion(map, rows, cols);
@@ -180,9 +227,9 @@ public:
         }
     }
 
-    bool check_death(int **map) {
-        for (int i = 0; i < 4; i++) {
-            if (collision(map, position, m_enemy, directions[i])) {
+    bool check_death(int **map, int rows, int cols, Enemy *enemies, int enemy_count) {
+        for (int i = 0; i < enemy_count; i++) {
+            if (enemies[i].alive && enemies[i].position.y == position.y && enemies[i].position.x == position.x) {
                 return true;
             }
         }
@@ -217,7 +264,7 @@ public:
             return;
         }
 
-        if (!out_of_bounds(position, player_direction, rows, cols) && ((!collision(map, position, m_wall, player_direction) && !collision(map, position, m_brk_wall, player_direction)) || current_powers[0].active)) {
+        if (!out_of_bounds(position, player_direction, rows, cols) && ((!collision(map,rows, cols, position, m_wall, player_direction) && !collision(map,rows,cols, position, m_brk_wall, player_direction)) || current_powers[0].active)) {
             position.x += player_direction.x;
             position.y += player_direction.y;
         }
@@ -234,51 +281,6 @@ public:
         if (player.position.x == position.x && player.position.y == position.y) {
             used = true;
             player.get_random_powerup();
-        }
-    }
-};
-
-struct Enemy {
-
-public:
-    coords position;
-    bool alive = true;
-    bool is_moving = false;
-
-    clock_t movement_start_ts;
-    clock_t interval_start_ts;
-    coords sort_direction;
-    int sort_range;
-
-    void move_enemy(int **map, coords direction) {
-        if (!collision(map, position, m_wall, direction) && !collision(map, position, m_brk_wall, direction)) {
-            position.x += direction.x;
-            position.y += direction.y;
-        }
-        else {
-            direction = directions[rand() % 4];
-            move_enemy(map, direction);
-        }
-    }
-
-    void check_enemy_movement(int **map) {
-
-        if (!is_moving && timer_check(movement_start_ts, clock(), enemy_timer)) {
-            sort_direction = directions[rand() % 4];
-            sort_range = (rand() % 3) + 1;
-            interval_start_ts = clock();
-            is_moving = true;
-        }
-        if (is_moving && timer_check(interval_start_ts, clock(), enemy_timer)) {
-            move_enemy(map, sort_direction);
-            interval_start_ts = clock();
-            if (sort_range == 0) {
-                movement_start_ts = clock();
-                is_moving = false;
-            }
-            else {
-                sort_range--;
-            }
         }
     }
 };
@@ -370,7 +372,9 @@ void draw_message(string message) {
 void read_map(int **&map,int**& structural_map, int &rows, int &cols, Player &player, Powerup *&powerups, int &map_powerups_count, Enemy *&enemies, int &enemy_count, string map_path, clock_t& time_offset) {
     for (int i = 0; i < rows; i++) {
         delete[]map[i];
+        delete[]structural_map[i];
     }
+    delete[]structural_map;
     delete[]map;
     delete[]enemies;
     delete[]powerups;
@@ -381,8 +385,10 @@ void read_map(int **&map,int**& structural_map, int &rows, int &cols, Player &pl
     map_file >> cols;
     
     map = new int* [rows];
+    structural_map = new int* [rows];
     for (int i = 0; i < rows; i++) {
         map[i] = new int[cols];
+        structural_map[i] = new int[cols];
     }
 
     enemy_count = 0;
@@ -390,6 +396,13 @@ void read_map(int **&map,int**& structural_map, int &rows, int &cols, Player &pl
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
             map_file >> map[i][j];
+            if (map[i][j] == m_brk_wall || map[i][j] == m_wall) {
+                structural_map[i][j] = map[i][j];
+            }
+            else {
+                structural_map[i][j] = m_floor;
+            }
+
             if (map[i][j] == m_powerup) {
                 map_powerups_count++;
             }
@@ -446,14 +459,18 @@ void save_map(int **map,int** structural_map, int rows, int cols, clock_t elapse
 
 void reset_game(Enemy *enemies, int enemy_count, Player &player, Powerup *powerups, int** map, int**structural_map) {
     player.bomb.exploded = false;
+    for (int i = 0; i < power_count; i++) {
+        player.current_powers[i].active = false;
+        player.current_powers[i].usage_count = 0;
+    }
     player.bombs_remaining = max_bombs;
 }
 
 void updateMatrix(Enemy *enemies, int enemy_count, Player player, Powerup *powerups, int map_powerups_count, int**map,int** structural_map, int rows, int cols) {
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
-            if (map[i][j] != m_wall && map[i][j] != m_brk_wall && map[i][j] != m_explosion) {
-                map[i][j] = m_floor;
+            if ( map[i][j] != m_explosion) {
+                map[i][j] = structural_map[i][j];
             }
         }
     }
@@ -575,7 +592,11 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
         cout << "Inimigos mortos: " << enemies_killed << "\n";
         cout << "Tempo de jogo: " << minutes << ":";
         if (seconds < 10) cout << "0";
-        cout << seconds << "\n \n";
+        cout << seconds << "\n";
+        cout << "Poderes usados: \n";
+        cout << "- Ghost Walker: " << player.current_powers[0].usage_count << "\n";
+        cout << "- Mega Bomba: " << player.current_powers[1].usage_count << "\n";
+        cout << "\n \n";
         for (int i = 0; i < 2; i++) {
             if (menu_select == i) {
                 cout << "-> ";
@@ -699,19 +720,17 @@ void game_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerups
             player.player_control(map, rows, cols, key);
         }
 
-        player.check_bomb_loop(map, rows, cols);
-        if (player.check_death(map)) break;
+        player.check_bomb_loop(map, structural_map, rows, cols);
+        if (player.check_death(map, rows, cols, enemies, enemy_count)) break;
         
         player.check_powerups_loop();
 
         for (int i = 0; i < enemy_count; i++) {
             if (enemies[i].alive) {
+                enemies[i].check_enemy_movement(map, rows, cols);
                 if (player.bomb.has_killed(map, enemies[i].position)) {
                     enemies[i].alive = false;
                     enemies_killed++;
-                }
-                else {
-                    enemies[i].check_enemy_movement(map);
                 }
             }
         }

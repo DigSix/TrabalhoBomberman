@@ -23,9 +23,9 @@ using namespace std;
 #define power_count 2
 #define max_bombs 1
 #define powerup_timer 5000
-#define bomb_timer 1000
+#define bomb_timer 1500
 #define explosion_timer 250
-#define enemy_timer 500
+#define enemy_timer 1250
 #define enemy_interval_timer enemy_timer / 3
 
 int map_select = 0;
@@ -56,6 +56,13 @@ bool collision(int **map, coords position, int collider, coords direction) {
 
 }
 
+bool out_of_bounds(coords position, coords direction, int rows, int cols) {
+    if (position.x + direction.x < 0 || position.x + direction.x >= rows || position.y + direction.y < 0 || position.y + direction.y >= cols) {
+        return true;
+    }
+    return false;
+}
+
 int interval_to_ms(clock_t start_ts, clock_t end_ts) {
     return (end_ts - start_ts) / (CLOCKS_PER_SEC / 1000);
 }
@@ -84,26 +91,41 @@ public:
         bomb_start_ts = clock();
     }
 
-    void destroy(int **map) {
+    void recursive_explosion(int** map, int rows, int cols, coords position, int depth) {
         for (int i = 0; i < 4; i++) {
-            if (map[position.y+directions[i].y][position.x + directions[i].x] == m_brk_wall) {
-                map[position.y + directions[i].y][position.x + directions[i].x] = m_floor;
+            if (!out_of_bounds(position, directions[i], rows, cols) && map[position.y + directions[i].y][position.x + directions[i].x] != m_wall) {
+                map[position.y + directions[i].y][position.x + directions[i].x] = m_explosion;
+                if (depth-1) {
+                    coords new_cell = { position.x + directions[i].x ,position.y + directions[i].y };
+                    recursive_explosion(map, rows, cols, new_cell, depth - 1);
+                }
             }
         }
+    }
+
+    void destroy(int **map, int rows, int cols, int explosion_level) {
+        map[position.y][position.x] = m_explosion;
+        recursive_explosion(map, rows, cols,  position, explosion_level);
         exploded = true;
         explosion_start_ts = clock();
+        
     }
 
-    void clear_explosion() {
+    void clear_explosion(int **map, int rows, int cols) {
         exploded = false;
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                if (map[i][j] == m_explosion) {
+                    map[i][j] = m_floor;
+                }
+            }
+        }
     }
 
-    bool has_killed( coords entity_position) {
+    bool has_killed(int **map, coords entity_position) {
         if (exploded) {
-            for (int i = 0; i < 5; i++) {
-                if (entity_position.y == position.y + directions[i].y && entity_position.x == position.x + directions[i].x) {
-                    return true;
-                }
+            if (map[entity_position.y][entity_position.x] == m_explosion) {
+                return true;
             }
         }
         return false;
@@ -132,14 +154,15 @@ public:
         current_powers[powerup_number].usage_count++;
     }
 
-    void check_bomb_loop(int **map) {
+    void check_bomb_loop(int **map, int rows, int cols) {
         clock_t current_ts = clock();
         if (bombs_remaining == 0) {
             if (!bomb.exploded && timer_check(bomb.bomb_start_ts, current_ts, bomb_timer)) {
-                bomb.destroy(map);
+                int explosion_level = current_powers[1].active ? 5 : 1;
+                bomb.destroy(map, rows, cols, explosion_level);
             }
             else if (bomb.exploded && timer_check(bomb.explosion_start_ts, current_ts, explosion_timer)) {
-                bomb.clear_explosion();
+                bomb.clear_explosion(map, rows, cols);
                 bombs_remaining++;
             }
         }
@@ -163,14 +186,14 @@ public:
                 return true;
             }
         }
-        if (bomb.has_killed(position)) {
+        if (bomb.has_killed(map, position)) {
             return true;
         }
         return false;
 
     }
 
-    void player_control(int **map, char key) {
+    void player_control(int **map, int rows, int cols, char key) {
         switch (key) {
         case 72: case 'w':
             player_direction = directions[0];
@@ -194,7 +217,7 @@ public:
             return;
         }
 
-        if ((!collision(map, position, m_wall, player_direction) && !collision(map, position, m_brk_wall, player_direction)) || current_powers[0].active) {
+        if (!out_of_bounds(position, player_direction, rows, cols) && ((!collision(map, position, m_wall, player_direction) && !collision(map, position, m_brk_wall, player_direction)) || current_powers[0].active)) {
             position.x += player_direction.x;
             position.y += player_direction.y;
         }
@@ -344,7 +367,7 @@ void draw_message(string message) {
 
 }
 
-void read_map(int **&map, int &rows, int &cols, Player &player, Powerup *&powerups, int &map_powerups_count, Enemy *&enemies, int &enemy_count, string map_path, clock_t& time_offset) {
+void read_map(int **&map,int**& structural_map, int &rows, int &cols, Player &player, Powerup *&powerups, int &map_powerups_count, Enemy *&enemies, int &enemy_count, string map_path, clock_t& time_offset) {
     for (int i = 0; i < rows; i++) {
         delete[]map[i];
     }
@@ -404,7 +427,7 @@ void read_map(int **&map, int &rows, int &cols, Player &player, Powerup *&poweru
     map_file.close();
 }
 
-void save_map(int **map, int rows, int cols, clock_t elapsed_time) {
+void save_map(int **map,int** structural_map, int rows, int cols, clock_t elapsed_time) {
     ofstream my_map;
     my_map.open("C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\save.txt");
     my_map << rows;
@@ -421,35 +444,26 @@ void save_map(int **map, int rows, int cols, clock_t elapsed_time) {
     my_map.close();
 }
 
-void reset_game(Enemy *enemies, int enemy_count, Player &player, Powerup *powerups, int** map) {
+void reset_game(Enemy *enemies, int enemy_count, Player &player, Powerup *powerups, int** map, int**structural_map) {
     player.bomb.exploded = false;
     player.bombs_remaining = max_bombs;
 }
 
-void updateMatrix(Enemy *enemies, int enemy_count, Player player, Powerup *powerups, int map_powerups_count, int**map, int rows, int cols) {
+void updateMatrix(Enemy *enemies, int enemy_count, Player player, Powerup *powerups, int map_powerups_count, int**map,int** structural_map, int rows, int cols) {
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
-            if (map[i][j] != m_wall && map[i][j] != m_brk_wall) {
+            if (map[i][j] != m_wall && map[i][j] != m_brk_wall && map[i][j] != m_explosion) {
                 map[i][j] = m_floor;
             }
         }
     }
     map[player.position.y][player.position.x] = m_player;
-    if (player.bombs_remaining == 0) {
-        if (player.bomb.exploded) {
-            for (int i = 0; i < 5; i++) {
-                if (map[player.bomb.position.y + directions[i].y][player.bomb.position.x + directions[i].x] != m_wall) {
-                    map[player.bomb.position.y + directions[i].y][player.bomb.position.x + directions[i].x] = m_explosion;
-                }
-            }
+    if (player.bombs_remaining == 0 && !player.bomb.exploded) {
+        if (player.position.y == player.bomb.position.y && player.position.x == player.bomb.position.x) {
+            map[player.bomb.position.y][player.bomb.position.x] = m_plr_and_bb;
         }
         else {
-            if (player.position.y == player.bomb.position.y && player.position.x == player.bomb.position.x) {
-                map[player.bomb.position.y][player.bomb.position.x] = m_plr_and_bb;
-            }
-            else {
-                map[player.bomb.position.y][player.bomb.position.x] = m_bomb;
-            }
+            map[player.bomb.position.y][player.bomb.position.x] = m_bomb;
         }
     }
 
@@ -465,7 +479,7 @@ void updateMatrix(Enemy *enemies, int enemy_count, Player player, Powerup *power
     }
 }
 
-void game_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerups, int map_powerups_count, int **map, int rows, int cols, HANDLE out, COORD coord, clock_t time_offset);
+void game_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerups, int map_powerups_count, int **map, int**structural_map, int rows, int cols, HANDLE out, COORD coord, clock_t time_offset);
 
 void leave_game(HANDLE out, COORD coord) {
     system("cls");
@@ -475,7 +489,7 @@ void leave_game(HANDLE out, COORD coord) {
     return;
 }
 
-void menu_loop(Enemy *enemies, int enemy_count, Player player, Powerup *powerups, int map_powerups_count, int **map, int rows, int cols, HANDLE out, COORD coord) {
+void menu_loop(Enemy *enemies, int enemy_count, Player player, Powerup *powerups, int map_powerups_count, int **map,int **structural_map, int rows, int cols, HANDLE out, COORD coord) {
     system("cls");
     SetConsoleTextAttribute(out, 15);
     clock_t time_offset = 0;
@@ -508,14 +522,14 @@ void menu_loop(Enemy *enemies, int enemy_count, Player player, Powerup *powerups
             case ' ':
                 switch (menu_select) {
                 case 0:
-                    reset_game(enemies, enemy_count, player, powerups, map);
-                    read_map(map, rows, cols, player, powerups, map_powerups_count, enemies, enemy_count, map_options[map_select], time_offset);
-                    game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord, time_offset);
+                    reset_game(enemies, enemy_count, player, powerups, map, structural_map);
+                    read_map(map, structural_map, rows, cols, player, powerups, map_powerups_count, enemies, enemy_count, map_options[map_select], time_offset);
+                    game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord, time_offset);
                     return;
                 case 1:
-                    reset_game(enemies, enemy_count, player, powerups, map);
-                    read_map(map, rows, cols, player, powerups, map_powerups_count, enemies, enemy_count, "C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\save.txt", time_offset);
-                    game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord, time_offset);
+                    reset_game(enemies, enemy_count, player, powerups, map, structural_map);
+                    read_map(map, structural_map, rows, cols, player, powerups, map_powerups_count, enemies, enemy_count, "C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\save.txt", time_offset);
+                    game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord, time_offset);
                     return;
                 case 2:
                     leave_game(out, coord);
@@ -539,7 +553,7 @@ void menu_loop(Enemy *enemies, int enemy_count, Player player, Powerup *powerups
     }
 }
 
-void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t game_end_ts, Enemy *enemies, int enemy_count, Player player, Powerup* powerups, int map_powerups_count, int **map, int rows, int cols, HANDLE out, COORD coord) {
+void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t game_end_ts, Enemy *enemies, int enemy_count, Player player, Powerup* powerups, int map_powerups_count, int **map,int **structural_map, int rows, int cols, HANDLE out, COORD coord) {
     system("cls");
     SetConsoleTextAttribute(out, 15);
     clock_t time_offset = 0;
@@ -581,12 +595,12 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
             case ' ':
                 switch (menu_select) {
                 case 0:
-                    reset_game(enemies, enemy_count, player, powerups, map);
-                    read_map(map, rows, cols, player, powerups, map_powerups_count, enemies, enemy_count, map_options[map_select], time_offset);
-                    game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord, time_offset);
+                    reset_game(enemies, enemy_count, player, powerups, map, structural_map);
+                    read_map(map, structural_map, rows, cols, player, powerups, map_powerups_count, enemies, enemy_count, map_options[map_select], time_offset);
+                    game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord, time_offset);
                     return;
                 case 1:
-                    menu_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord);
+                    menu_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord);
                     return;
                 }
             case 72: case 'w':
@@ -607,7 +621,7 @@ void end_game_loop(bool win, int enemies_killed, clock_t game_start_ts, clock_t 
     }
 }
 
-void pause_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerups, int map_powerups_count, int **map, int rows, int cols, HANDLE out, COORD coord, clock_t start_game_ts, clock_t final_game_ts, int enemies_killed) {
+void pause_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerups, int map_powerups_count, int **map, int**structural_map, int rows, int cols, HANDLE out, COORD coord, clock_t start_game_ts, clock_t final_game_ts, int enemies_killed) {
     system("cls");
     SetConsoleTextAttribute(out, 15);
     static char key;
@@ -641,14 +655,14 @@ void pause_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerup
             case ' ':
                 switch (menu_select) {
                 case 0:
-                    game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord, final_game_ts-start_game_ts);
+                    game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord, final_game_ts-start_game_ts);
                     return;
                 case 1:
-                    save_map(map, rows, cols, final_game_ts - start_game_ts);
+                    save_map(map, structural_map, rows, cols, final_game_ts - start_game_ts);
                     saved = true;
                     break;
                 case 2:
-                    menu_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord);
+                    menu_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord);
                     return;
                 }
                 break;
@@ -663,34 +677,36 @@ void pause_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerup
     }
 }
 
-void game_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerups, int map_powerups_count, int **map, int rows, int cols, HANDLE out, COORD coord, clock_t time_offset=0) {
+void game_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerups, int map_powerups_count, int **map, int**structural_map, int rows, int cols, HANDLE out, COORD coord, clock_t time_offset=0) {
     system("cls");
     clock_t start_game_ts = clock()-time_offset, current_ts;
     static char key;
     // Colocar valor inicial para variável de inimigos mortos dinâmica
     int enemies_killed = 0;
 
-    while (!player.check_death(map) && enemies_killed < enemy_count) {
+    while (enemies_killed < enemy_count) {
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-        updateMatrix(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols);
+        updateMatrix(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols);
 
         current_ts = clock();
 
         if (_kbhit()) {
             key = _getch();
             if (key == 'p') {
-                pause_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord, start_game_ts, current_ts, enemies_killed);
+                pause_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord, start_game_ts, current_ts, enemies_killed);
                 return;
             }
-            player.player_control(map, key);
+            player.player_control(map, rows, cols, key);
         }
 
-        player.check_bomb_loop(map);
+        player.check_bomb_loop(map, rows, cols);
+        if (player.check_death(map)) break;
+        
         player.check_powerups_loop();
 
         for (int i = 0; i < enemy_count; i++) {
             if (enemies[i].alive) {
-                if (player.bomb.has_killed(enemies[i].position)) {
+                if (player.bomb.has_killed(map, enemies[i].position)) {
                     enemies[i].alive = false;
                     enemies_killed++;
                 }
@@ -712,7 +728,7 @@ void game_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerups
 
     }
     bool victory = enemies_killed == enemy_count ? true : false;
-    end_game_loop(victory, enemies_killed, start_game_ts, clock(), enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord);
+    end_game_loop(victory, enemies_killed, start_game_ts, clock(), enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord);
 }
 
 int** initialize_map(int &rows, int &cols) {
@@ -741,6 +757,7 @@ int main()
 
     int rows = 1, cols = 1, enemy_count = 0, map_powerups_count = 0;
     int** map = initialize_map(rows, cols);
+    int** structural_map = initialize_map(rows, cols);
 
     Player player; 
     Powerup* powerups;
@@ -748,6 +765,6 @@ int main()
     Enemy *enemies;
     enemies = new Enemy[0];
 
-    menu_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, rows, cols, out, coord);
+    menu_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map,rows, cols, out, coord);
     return 0;
 }

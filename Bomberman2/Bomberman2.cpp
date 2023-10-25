@@ -23,8 +23,8 @@ using namespace std;
 #define power_count 2
 #define max_bombs 1
 #define powerup_timer 5000
-#define bomb_timer 1500
-#define explosion_timer 250
+#define bomb_timer 2500
+#define explosion_timer 2500
 #define enemy_timer 1250
 #define enemy_interval_timer enemy_timer / 3
 
@@ -257,7 +257,7 @@ public:
         case ' ':
             if (bombs_remaining > 0) {
                 bomb.start_bomb(position);
-                bombs_remaining--;
+                bombs_remaining = 0;
             }
             return;
         default:
@@ -413,6 +413,15 @@ void read_map(int **&map,int**& structural_map, int &rows, int &cols, Player &pl
                 player.position.y = i;
                 player.position.x = j;
             }
+            else if (map[i][j] == m_bomb) {
+                player.bomb.position.y = i;
+                player.bomb.position.x = j;
+                player.bombs_remaining = 0;
+            }
+            else if (map[i][j] == m_explosion) {
+                player.bomb.exploded = true;
+                player.bombs_remaining = 0;
+            }
         }
     }
     enemies = new Enemy[enemy_count];
@@ -435,12 +444,18 @@ void read_map(int **&map,int**& structural_map, int &rows, int &cols, Player &pl
     }
 
     if (!map_file.eof()) {
+        clock_t bomb_offset, explosion_offset;
         map_file >> time_offset;
+        map_file >> bomb_offset;
+        map_file >> explosion_offset;
+
+        player.bomb.bomb_start_ts = clock() - bomb_offset;
+        player.bomb.explosion_start_ts = clock() - explosion_offset;
     }
     map_file.close();
 }
 
-void save_map(int **map,int** structural_map, int rows, int cols, clock_t elapsed_time) {
+void save_map(int **map,int** structural_map, int rows, int cols, Player player,clock_t start_ts, clock_t final_ts) {
     ofstream my_map;
     my_map.open("C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\save.txt");
     my_map << rows;
@@ -453,7 +468,15 @@ void save_map(int **map,int** structural_map, int rows, int cols, clock_t elapse
         }
         my_map << "\n";
     }
-    my_map << elapsed_time;
+    my_map << final_ts - start_ts;
+    my_map << "\n";
+
+    clock_t bomb_offset = player.bombs_remaining == 0 && !player.bomb.exploded ? final_ts-player.bomb.bomb_start_ts : 0;
+    my_map << bomb_offset;
+    my_map << "\n";
+
+    clock_t explosion_offset = player.bombs_remaining == 0 && player.bomb.exploded ? final_ts -player.bomb.explosion_start_ts : 0;
+    my_map << explosion_offset;
     my_map.close();
 }
 
@@ -679,7 +702,7 @@ void pause_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerup
                     game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord, final_game_ts-start_game_ts);
                     return;
                 case 1:
-                    save_map(map, structural_map, rows, cols, final_game_ts - start_game_ts);
+                    save_map(map, structural_map, rows, cols, player, start_game_ts, final_game_ts);
                     saved = true;
                     break;
                 case 2:

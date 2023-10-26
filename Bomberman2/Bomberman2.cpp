@@ -448,14 +448,16 @@ void read_map(int **&map,int**& structural_map, int &rows, int &cols, Player &pl
         map_file >> time_offset;
         map_file >> bomb_offset;
         map_file >> explosion_offset;
-
+        // O timestamp de detonação e explosão são carregados aqui
+        // Efetivamente, é como se o momento que a bomba foi colocada/detonada aconteceu x segundos antes do clock atual
+        // e então a partir do momento atual o temporizador irá funcionar normal no game loop
         player.bomb.bomb_start_ts = clock() - bomb_offset;
         player.bomb.explosion_start_ts = clock() - explosion_offset;
     }
     map_file.close();
 }
 
-void save_map(int **map,int** structural_map, int rows, int cols, Player player,clock_t start_ts, clock_t final_ts) {
+void save_map(int **map,int** structural_map, int rows, int cols, Player player,clock_t start_ts, clock_t final_ts, int enemies_killed) {
     ofstream my_map;
     my_map.open("C:\\Users\\gabim\\source\\repos\\DigSix\\TrabalhoBomberman\\Bomberman2\\save.txt");
     my_map << rows;
@@ -471,12 +473,15 @@ void save_map(int **map,int** structural_map, int rows, int cols, Player player,
     my_map << final_ts - start_ts;
     my_map << "\n";
 
+    // Todos os saves terão o offset de tempo da explosão e da detonação da bomba
     clock_t bomb_offset = player.bombs_remaining == 0 && !player.bomb.exploded ? final_ts-player.bomb.bomb_start_ts : 0;
     my_map << bomb_offset;
     my_map << "\n";
 
     clock_t explosion_offset = player.bombs_remaining == 0 && player.bomb.exploded ? final_ts -player.bomb.explosion_start_ts : 0;
     my_map << explosion_offset;
+
+    my_map << enemies_killed;
     my_map.close();
 }
 
@@ -702,7 +707,7 @@ void pause_loop(Enemy *enemies, int enemy_count, Player player, Powerup* powerup
                     game_loop(enemies, enemy_count, player, powerups, map_powerups_count, map, structural_map, rows, cols, out, coord, final_game_ts-start_game_ts);
                     return;
                 case 1:
-                    save_map(map, structural_map, rows, cols, player, start_game_ts, final_game_ts);
+                    save_map(map, structural_map, rows, cols, player, start_game_ts, final_game_ts, enemies_killed);
                     saved = true;
                     break;
                 case 2:
